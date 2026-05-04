@@ -1,0 +1,9 @@
+// Unity 2022 대응: 심볼 보존 설정
+android {
+    packagingOptions {
+        doNotStrip "**/libunity.so"
+        doNotStrip "**/libil2cpp.so"
+        doNotStrip "**/libmain.so"
+        exclude "**/libil2cpp.usym.so"
+    }
+}
