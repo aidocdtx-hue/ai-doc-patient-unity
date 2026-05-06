@@ -82,9 +82,12 @@ public class PointsController : MonoBehaviour
             PoseLandmarkerResultAnnotationController = FindAnyObjectByType<PoseLandmarkerResultAnnotationController>();
         }
 
-        // 인식이 되면 게임 버튼들이 나타남
-        startBtn.SetActive(true); 
-        startBtn2.SetActive(true);
+        // 시작 버튼은 씬에서 처음부터 활성화 — 캘리브레이션 패널(어깨/손 3초 유지)이 실제 인식 게이트 역할
+        // 인식이 끝났을 때 사용자가 이미 캘리브레이션 패널에 진입해 있으면 어깨 트리거 즉시 활성화
+        if (StaticData.nowMode == Mode.Calibrate)
+        {
+            SetPointTrigger();
+        }
         //이전 게임기록이 남아있다면 자동으로 실행해주는 부분
         //startScreen.CheckLastPlayed();
     }
@@ -94,6 +97,8 @@ public class PointsController : MonoBehaviour
     /// </summary>
     public void SetPointTrigger()
     {
+        //points 미할당(인식 전) 보호 — 캘리브레이션 진입이 인식 완료보다 빠를 수 있음
+        if (points == null) return;
         //모든 포인터의 트리거를 해제
         AllPointFalse();
         //캘리브레이션 단계면 
@@ -110,6 +115,7 @@ public class PointsController : MonoBehaviour
     /// </summary>
     public void AllPointFalse()
     {
+        if (points == null) return;
         //포인트의 갯수만큼 반복
         for (int i = 0; i < points.Length; i++)
         {
