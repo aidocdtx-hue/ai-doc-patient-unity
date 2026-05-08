@@ -341,6 +341,8 @@ public class PointsController : MonoBehaviour
         if (pairGamePanel != null) pairGamePanel.SetActive(false);
         if (blockGamePanel != null) blockGamePanel.SetActive(false);
         if (calibrationPanel != null) calibrationPanel.SetActive(false);
+        //gameGuidePanel도 명시 정리 — 가이드 도중 종료 후 새 운동 시작 시 시작 화면 위에 가이드 잔존 회피.
+        if (startScreen != null && startScreen.gameGuidePanel != null) startScreen.gameGuidePanel.SetActive(false);
         if (startScreen != null) startScreen.gameObject.SetActive(true);
 
         PlayerPrefs.SetInt("NormalEnd", 0);
