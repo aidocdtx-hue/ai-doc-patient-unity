@@ -51,32 +51,29 @@ public class StartScreen : MonoBehaviour
 
 
     /// <summary>
-    /// 마지막으로 플레이 한 게임을 자동으로 시작하는 기능
+    /// 마지막으로 플레이 한 게임을 자동으로 시작하는 기능.
+    /// Flutter가 'continue' 명령을 보냈다 = 이어할 의도가 명확. NormalEnd PlayerPref 가드는 제거 —
+    /// 게임 진입 전 단계(시작/가이드/캘리브레이션)에서 종료된 케이스도 NormalEnd=0이지만 Flutter는
+    /// last_exercise_record_id가 있으면 continue 보냄. Unity-Flutter 신호 불일치로 가이드 미진입하던
+    /// 결함 차단. LastPlayed PlayerPref(직전 게임 종류)는 그대로 활용.
     /// </summary>
     public void CheckLastPlayed()
     {
-        //비정상종료면
-        if (isNormalEnd == 1)
+        //마지막으로 플레이한 게임 종류로 isPairGame 복원
+        if (PlayerPrefs.GetString("LastPlayed") == "Pair")
         {
-            //마지막으로 플레이한 게임이 짝맞추기면
-            if (PlayerPrefs.GetString("LastPlayed") == "Pair")
-            {
-                //짝맞추기상태 켜기
-                StaticData.isPairGame = true;
-            }
-            //블럭밀기면
-            else
-            {
-                //짝맞추기상태 끄기 (블럭밀기상태)
-                StaticData.isPairGame = false;
-            }
-            //비정상종료 상태를 변수에 저장
-            StaticData.isNormalEnd = false;
-            //시작화면 끄기
-            gameObject.SetActive(false);
-            //이어하기 흐름도 가이드 화면부터 시작 (사용자 결정 — 캘리브레이션 직접 진입은 컨텍스트 손실).
-            gameGuidePanel.SetActive(true);
+            StaticData.isPairGame = true;
         }
+        else
+        {
+            StaticData.isPairGame = false;
+        }
+        //StaticData.isNormalEnd는 PlayerPrefs("NormalEnd") 값에 따라 동기화 — 게임 측 isFirst 분기에 사용됨.
+        StaticData.isNormalEnd = (isNormalEnd != 1);
+        //시작화면 끄기
+        gameObject.SetActive(false);
+        //이어하기 흐름도 가이드 화면부터 시작 (사용자 결정 — 캘리브레이션 직접 진입은 컨텍스트 손실).
+        gameGuidePanel.SetActive(true);
     }
 
     /// <summary>

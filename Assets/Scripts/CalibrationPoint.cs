@@ -24,7 +24,20 @@ public class CalibrationPoint : MonoBehaviour
         {
             Debug.LogError("CalibrationPoint 스크립트가 있는 오브젝트에 Collider가 없습니다!", gameObject);
         }
-        if (pointIndex != 99) targetCollider = pointsController.GetPoint(pointIndex).gameObject.GetComponent<Collider>();
+        // Y-2 후 카메라/추론 시작이 ClickBtn 시점으로 미뤄져 첫 진입 시 PointsController.points가 미할당 상태일 수 있음.
+        // GetPoint가 null 반환하면 targetCollider 미할당 → Update의 lazy load(TryAssignTargetCollider)가 매 프레임 retry로 보강.
+        TryAssignTargetCollider();
+    }
+
+    /// <summary>
+    /// PointsController.points 할당 후 GetPoint로 lookup. Y-2 race condition 회피용 lazy load.
+    /// pointIndex==99(특수)나 이미 할당된 경우는 스킵 — 매 프레임 호출되어도 무해.
+    /// </summary>
+    private void TryAssignTargetCollider()
+    {
+        if (pointIndex == 99 || targetCollider != null || pointsController == null) return;
+        var pt = pointsController.GetPoint(pointIndex);
+        if (pt != null) targetCollider = pt.gameObject.GetComponent<Collider>();
     }
 
     private void OnEnable()
@@ -67,6 +80,10 @@ public class CalibrationPoint : MonoBehaviour
 
     private void Update()
     {
+        // points lazy load — Y-2 race condition으로 Start 시점에 할당 못했어도 매 프레임 retry.
+        // 이미 할당됐거나 pointIndex==99이면 즉시 return하므로 비용 0.
+        TryAssignTargetCollider();
+
         // targetCollider가 할당되지 않았거나 비활성화 상태이면 검사하지 않음
         if (targetCollider == null || !targetCollider.gameObject.activeInHierarchy)
         {

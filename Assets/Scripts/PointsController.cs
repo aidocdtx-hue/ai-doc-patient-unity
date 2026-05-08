@@ -262,9 +262,13 @@ public class PointsController : MonoBehaviour
     /// 포인트를 반환하는 부분
     /// </summary>
     /// <param name="i">미디어파이프 포인트의 인덱스</param>
-    /// <returns></returns>
+    /// <returns>points 미할당/인덱스 범위 초과 시 null — 호출처에서 null 가드 필수</returns>
     public PointAnnotation GetPoint(int i)
     {
+        //points 미할당(MediaPipe 추론 첫 결과 도달 전)에 호출되면 NRE 발생.
+        //Y-2 후 카메라/추론 시작이 ClickBtn 시점으로 미뤄져 캘리브레이션 진입 시 race condition 가능.
+        //CalibrationPoint.Start가 GetPoint 호출 시 NRE 발생하면 targetCollider 미할당 → 자세 인식 불가.
+        if (points == null || i < 0 || i >= points.Length) return null;
         return points[i];
     }
 
