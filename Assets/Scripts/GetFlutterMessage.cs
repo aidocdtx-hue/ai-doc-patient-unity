@@ -89,25 +89,25 @@ public class GetFlutterMessage : MonoBehaviour
                 //카메라 LED도 함께 꺼짐. 복귀 시 resume 메시지에서 ReturnToGameGuide로 재개.
                 if (pointsController != null) pointsController.PauseMediapipe();
 
-                //단계별 reason 분기:
-                //- Playing: 운동 진행 중 → background reason → Flutter는 confirm 다이얼로그 → 이어하기 시 resume 송신
-                //- Selection/Guide/Calibration: 운동 시작 전 → cancelled_pre_game reason → Flutter는 record 미완료 처리 + 즉시 navigate
-                if (StaticData.stage == ExerciseStage.Playing)
-                {
-                    SendToFlutter.Send("{\"command\":\"result\", \"reason\":\"background\"}");
-                }
-                else
-                {
-                    SendToFlutter.Send("{\"command\":\"result\", \"reason\":\"cancelled_pre_game\"}");
-                }
+                //모든 단계에서 background reason 통일 송신. Flutter가 단계별 confirm 다이얼로그 표시.
+                //이전엔 단계별 reason 분기(Playing → background, 그 외 → cancelled_pre_game)였으나
+                //사용자 결정: OS 홈 버튼은 의도 모호(전화/알림/실수)라 모든 단계에서 사용자 동의 받는 팝업 필요.
+                SendToFlutter.Send("{\"command\":\"result\", \"reason\":\"background\"}");
             }
             else if (splitedMessage[0].Contains("resume"))
             {
-                //앱 포그라운드 복귀 시 사용자가 confirm 다이얼로그에서 "이어하기" 선택 후 송신.
-                //사용자 결정: 이어하기는 게임 그 자리부터가 아닌 가이드 → 캘리브레이션 → 게임 흐름으로 다시 시작.
-                //ReturnToGameGuide가 게임/일시정지/캘리브레이션 패널을 닫고 gameGuidePanel 활성화 +
-                //AudioListener.pause=false + ResumeMediapipe(IsPaused 가드로 idempotent) 처리.
-                if (pointsController != null) pointsController.ReturnToGameGuide();
+                //앱 포그라운드 복귀 시 사용자가 confirm 다이얼로그에서 "계속하기" 선택 후 송신.
+                //단계별 분기:
+                //- Selection: 시작 화면 그대로 유지 (카메라/추론 미시작 상태 — Y-2 패턴). 사운드 unmute만.
+                //- Guide/Calibration/Playing: ReturnToGameGuide로 가이드부터 다시 시작 (사용자 결정).
+                if (StaticData.stage == ExerciseStage.Selection)
+                {
+                    AudioListener.pause = false;
+                }
+                else
+                {
+                    if (pointsController != null) pointsController.ReturnToGameGuide();
+                }
             }
             else if (splitedMessage[0].Contains("mute"))
             {
