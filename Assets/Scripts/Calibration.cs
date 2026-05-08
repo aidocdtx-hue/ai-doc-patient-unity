@@ -52,11 +52,16 @@ public class Calibration : MonoBehaviour
     //캘리브레이션 화면이 켜지면
     private void OnEnable()
     {
-        //단계: Calibration. setter가 Flutter로 자동 송신. background 시 cancelled_pre_game reason 분기.
+        //단계: Calibration. setter가 Flutter로 자동 송신. background 시 result(background) 통일 송신.
         StaticData.stage = ExerciseStage.Calibration;
-        //Phase 1: ResumeMediapipe는 IsPaused 가드로 idempotent — 이미 Play 중이면 Stop+Run 재시작 회피.
-        //W-4 + Y로 SetMediapipeCamera 끝의 _baseRunner.Pause()는 제거됐고 ClickBtn에서 StartMediapipe 호출.
-        //이 호출은 background→resume 사이클의 진짜 Pause 상태에서만 의미있는 안전망.
+        //가이드 패널 잔존 정리 — GameGuide의 마지막 "시작" 버튼 OnClick wire-up이 calibrationPanel만
+        //활성화하고 gameGuidePanel을 끄지 않으면 두 화면이 겹쳐 보임. 코드 차원 안전망.
+        if (pointsController != null && pointsController.startScreen != null
+            && pointsController.startScreen.gameGuidePanel != null)
+        {
+            pointsController.startScreen.gameGuidePanel.SetActive(false);
+        }
+        //Phase 1: ResumeMediapipe는 IsPaused 가드로 idempotent — 이미 Play 중이면 Resume() 호출 스킵.
         pointsController.ResumeMediapipe();
 
         //스켈레톤 켜기
