@@ -274,14 +274,14 @@ public class PointsController : MonoBehaviour
 
     /// <summary>
     /// 백그라운드 복귀 또는 캘리브레이션 진입 시 BaseRunner 재개.
-    /// _baseRunner가 private [SerializeField]라 외부 직접 접근 불가 — 명시 wrapper.
-    /// IsPaused 가드 — 이미 Play 중일 때 Play() 재호출하면 LegacySolutionRunner.Play가
-    /// Stop(webCamTexture nullify + taskApi.Close + StopCoroutine) 후 새 Run 시작 → PointListAnnotation/points
-    /// stale로 SetPointTrigger 무효화. 가드로 진짜 Pause 상태에서만 Play 호출.
+    /// Play() 대신 Resume() 호출 — Play()는 Stop+새 Run 사이클을 돌아 webCamTexture nullify +
+    /// taskApi.Close → PointListAnnotation/points stale 발생. Resume()은 isPaused=false +
+    /// ImageSource.Resume(webCamTexture.Play 재호출)만 — 가벼움 + stale 회피.
+    /// IsPaused 가드 — 이미 Play 중이면 무시. 첫 시작용은 StartMediapipe(Play 호출) 사용.
     /// </summary>
     public void ResumeMediapipe()
     {
-        if (_baseRunner != null && _baseRunner.IsPaused) _baseRunner.Play();
+        if (_baseRunner != null && _baseRunner.IsPaused) _baseRunner.Resume();
     }
 
     /// <summary>

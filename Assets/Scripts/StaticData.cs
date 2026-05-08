@@ -70,18 +70,18 @@ public class StaticData : MonoBehaviour
     public static float destTime = 5f;
 
     //운동 진행 단계 (Selection/Guide/Calibration/Playing).
-    //setter에서 변경 시 Flutter로 stage 메시지 자동 송신 → unity_exercise_screen이 _currentStage 갱신.
+    //setter에서 매 set마다 Flutter로 stage 메시지 송신 → unity_exercise_screen이 _currentStage 갱신.
+    //이전엔 `if (_stage != value)` 가드가 있었으나 _stage 초기값(Selection)과 첫 set(StartScreen.Awake의 Selection)이
+    //동일해 setter 진입 안 함 → Flutter _currentStage가 영원히 null → resumed 분기의 `_currentStage == 'playing'`
+    //가드 못 통과 → confirm 다이얼로그 안 뜨던 결함 차단. 가드 제거 — 동일 값이어도 송신 (idempotent 송신).
     private static ExerciseStage _stage = ExerciseStage.Selection;
     public static ExerciseStage stage
     {
         get => _stage;
         set
         {
-            if (_stage != value)
-            {
-                _stage = value;
-                SendToFlutter.Send("{\"command\":\"stage\", \"stage\":\"" + value.ToString().ToLower() + "\"}");
-            }
+            _stage = value;
+            SendToFlutter.Send("{\"command\":\"stage\", \"stage\":\"" + value.ToString().ToLower() + "\"}");
         }
     }
 

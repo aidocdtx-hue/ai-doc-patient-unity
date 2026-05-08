@@ -46,6 +46,9 @@ public class SetMediapipeCamera : MonoBehaviour
             //해상도 변경만 적용 — Pause→SelectResolution→Play 순환은 webCamTexture 재시작 비용을 동반하므로
             //원하는 해상도가 device default와 같으면 Pause/Play 자체를 스킵해 흐림 구간을 추가로 제거.
             var imageSource = ImageSourceProvider.ImageSource;
+            //Y-2 후 BaseRunner.autoStart=false로 Bootstrap이 imageSource를 등록하기 전 시점에 진입 가능 →
+            //null 가드로 NRE 회피. ImageSource는 사용자가 게임 선택(StartMediapipe) 후 첫 Play에서 init.
+            if (imageSource == null) yield break;
             var resolutions = imageSource.availableResolutions;
             var options = resolutions.Select(resolution => resolution.ToString()).ToList();
             int count = -1;
