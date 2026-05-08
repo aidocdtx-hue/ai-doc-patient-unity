@@ -18,6 +18,12 @@ namespace Mediapipe.Unity.Sample
 
     [SerializeField] private GameObject _bootstrapPrefab;
 
+    //Unity 시작 시 Bootstrap 완료 후 자동으로 Play() 호출 여부.
+    //false로 두면 외부(SetMediapipeCamera/StartScreen 등)에서 명시 Play() 호출 필요.
+    //solidosis 운동 화면은 시작 화면(게임 선택)에서 카메라/추론 OFF 유지 → 가이드 진입 시 Play.
+    [SerializeField] private bool _autoStart = true;
+    public bool autoStart { get => _autoStart; set => _autoStart = value; }
+
 #pragma warning disable IDE1006
     // TODO: make it static
     protected virtual string TAG => GetType().Name;
@@ -26,6 +32,11 @@ namespace Mediapipe.Unity.Sample
     protected Bootstrap bootstrap;
     protected bool isPaused;
 
+    //isPaused getter — 외부(PointsController.ResumeMediapipe)에서 idempotent 가드용으로 사용.
+    //이미 Play 중일 때 _baseRunner.Play() 재호출하면 LegacySolutionRunner/VisionTaskApiRunner.Play가
+    //Stop+새 Run 사이클을 돌아 webCamTexture nullify + taskApi.Close → PointListAnnotation/points stale.
+    public bool IsPaused => isPaused;
+
     private readonly Stopwatch _stopwatch = new();
 
     protected virtual IEnumerator Start()
@@ -33,7 +44,10 @@ namespace Mediapipe.Unity.Sample
       bootstrap = FindBootstrap();
       yield return new WaitUntil(() => bootstrap.isFinished);
 
-      Play();
+      if (_autoStart)
+      {
+        Play();
+      }
     }
 
     /// <summary>

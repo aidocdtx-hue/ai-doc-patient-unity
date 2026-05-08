@@ -164,8 +164,10 @@ public class PointsController : MonoBehaviour
 
     private void Update()
     {
-        //포인트가 할당되었으면
-        if (points != null)
+        //points 배열이 할당되고 손 landmark(15~20번) 모두 들어왔을 때만 인덱스 접근.
+        //카메라가 사람 일부만 잡거나 인식 부분 실패 시 배열이 짧을 수 있어 IndexOutOfRangeException 방지.
+        bool handsLandmarksReady = points != null && points.Length >= 21;
+        if (handsLandmarksReady)
         {
             //손 포인트들의 위치에 따라 왼 손과 오른손의 위치 이동
             leftHand.transform.position = (points[20].transform.position + points[16].transform.position) / 2f;
@@ -177,8 +179,10 @@ public class PointsController : MonoBehaviour
         {
             //두 손 위치의 가운데 위치를 구하기
             Vector2 center = new Vector2((leftHand.transform.localPosition.x + rightHand.transform.localPosition.x) / 2, (leftHand.transform.localPosition.y + rightHand.transform.localPosition.y) / 2);
-            //두 손 사이의 거리를 구하기
-            handsDistance = Vector2.Distance(points[17].transform.position, points[18].transform.position);
+            //두 손 사이의 거리를 구하기. landmark 미준비 시 큰 값으로 두면 아래 < 40 분기에 안 걸려 colliderArea 비활성 유지.
+            handsDistance = handsLandmarksReady
+                ? Vector2.Distance(points[17].transform.position, points[18].transform.position)
+                : float.MaxValue;
 
             //현재 터치영역 위치에서 손을 움직인 값이 무시 범위 이내라면
             if ((colliderArea.localPosition.x - center.x < minimumMoveCheckValue && colliderArea.localPosition.x - center.x > -minimumMoveCheckValue) || 
@@ -215,8 +219,8 @@ public class PointsController : MonoBehaviour
             colliderArea.gameObject.SetActive(false);
         }
 
-        //포인트가 할당되어있고, 일시정지 화면이 떠있지 않고, 현재 모드가 게임모드면
-        if (points != null && !pauseScreen.activeInHierarchy && StaticData.nowMode == Mode.Game)
+        //포인트가 할당되어있고, PoseLandmarker도 준비됨, 일시정지 화면이 떠있지 않고, 현재 모드가 게임모드면
+        if (points != null && PoseLandmarkerResultAnnotationController != null && !pauseScreen.activeInHierarchy && StaticData.nowMode == Mode.Game)
         {
             //어깨 포인트가 화면 밖으로 벗어나면
             if (PoseLandmarkerResultAnnotationController.GetLandmark(12).x < 0.05f || PoseLandmarkerResultAnnotationController.GetLandmark(11).x > 0.95f)
@@ -264,13 +268,118 @@ public class PointsController : MonoBehaviour
         return points[i];
     }
 
-    //앱이 백그라운드로 이동하면 Pause
-    private void OnApplicationPause(bool pause) 
+    /// <summary>
+    /// 백그라운드 복귀 또는 캘리브레이션 진입 시 BaseRunner 재개.
+    /// _baseRunner가 private [SerializeField]라 외부 직접 접근 불가 — 명시 wrapper.
+    /// IsPaused 가드 — 이미 Play 중일 때 Play() 재호출하면 LegacySolutionRunner.Play가
+    /// Stop(webCamTexture nullify + taskApi.Close + StopCoroutine) 후 새 Run 시작 → PointListAnnotation/points
+    /// stale로 SetPointTrigger 무효화. 가드로 진짜 Pause 상태에서만 Play 호출.
+    /// </summary>
+    public void ResumeMediapipe()
     {
+        if (_baseRunner != null && _baseRunner.IsPaused) _baseRunner.Play();
+    }
+
+    /// <summary>
+    /// 앱 백그라운드 진입 시 MediaPipe 추론 + 카메라(WebCamTexture) 정지.
+    /// _baseRunner.Pause()는 내부에서 imageSource.Pause() → webCamTexture.Pause() 호출 →
+    /// 카메라 LED OFF + 추론 정지. 복귀 시 ResumeMediapipe()로 재개.
+    /// idempotent — 이미 Pause 중이어도 무해.
+    /// </summary>
+    public void PauseMediapipe()
+    {
+        if (_baseRunner != null) _baseRunner.Pause();
+    }
+
+    /// <summary>
+    /// BaseRunner의 첫 Play 명시 호출 — autoStart=false로 자동 시작이 막힌 시점에서 카메라/추론 시작.
+    /// 시작 화면(게임 선택) → 사용자가 게임 선택(StartScreen.ClickBtn/ClickPairBtn) → 가이드 진입 시 호출.
+    /// Play()는 새 Run 코루틴 시작 → imageSource.Play() → webCamTexture 생성 + 카메라 LED ON.
+    /// 이미 Play 중이면 LegacySolutionRunner/VisionTaskApiRunner.Play 가 Stop 후 새로 시작 →
+    /// stutter 발생 가능. 호출처에서 첫 시작 1회만 호출하도록 보장.
+    /// </summary>
+    public void StartMediapipe()
+    {
+        if (_baseRunner != null) _baseRunner.Play();
+    }
+
+    /// <summary>
+    /// 백그라운드 복귀 후 사용자가 "이어하기" 선택 시 가이드 화면으로 복귀.
+    /// 게임 진행 패널/일시정지/캘리브레이션을 닫고 startScreen.gameGuidePanel만 활성화.
+    /// 시작 화면 GameObject(StartScreen)는 비활성 그대로 — 사용자는 게임 선택 다시 안 함, 직전 isPairGame 유지.
+    /// timeScale + AudioListener.pause 복원. ResumeMediapipe로 카메라/추론 재개도 함께 처리.
+    /// </summary>
+    public void ReturnToGameGuide()
+    {
+        if (pauseScreen != null) pauseScreen.SetActive(false);
+        if (pairGamePanel != null) pairGamePanel.SetActive(false);
+        if (blockGamePanel != null) blockGamePanel.SetActive(false);
+        if (calibrationPanel != null) calibrationPanel.SetActive(false);
+        if (startScreen != null && startScreen.gameGuidePanel != null)
+        {
+            startScreen.gameGuidePanel.SetActive(true);
+        }
+
+        Time.timeScale = 1f;
+        AudioListener.pause = false;
+        ResumeMediapipe();
+    }
+
+    /// <summary>
+    /// 운동 중단/종료 후 신규 진입(start) 시 게임 선택 화면으로 강제 복귀.
+    /// 게임/일시정지/캘리브레이션 패널을 모두 끄고 StartScreen GameObject를 재활성화.
+    /// 직전 게임 상태(isPairGame, isNormalEnd, NormalEnd PlayerPref)와 timeScale, AudioListener.pause도 함께 리셋.
+    /// idempotent — 이미 시작 화면 상태에서 호출돼도 무해.
+    /// </summary>
+    public void ResetToInitial()
+    {
+        if (pauseScreen != null) pauseScreen.SetActive(false);
+        if (pairGamePanel != null) pairGamePanel.SetActive(false);
+        if (blockGamePanel != null) blockGamePanel.SetActive(false);
+        if (calibrationPanel != null) calibrationPanel.SetActive(false);
+        if (startScreen != null) startScreen.gameObject.SetActive(true);
+
+        PlayerPrefs.SetInt("NormalEnd", 0);
+        StaticData.isNormalEnd = false;
+        StaticData.isPairGame = false;
+
+        Time.timeScale = 1f;
+        AudioListener.pause = false;
+    }
+
+    //앱이 백그라운드로 이동하면 Pause
+    private void OnApplicationPause(bool pause)
+    {
+        //모바일 홈 버튼 / 화면 OFF / 다른 앱 전환 등 백그라운드 진입 시 모든 오디오 음소거.
+        //resume 시 자동으로 false 복원되어 효과음/BGM 그대로 이어짐.
+        AudioListener.pause = pause;
+
+        //모드 무관하게 MediaPipe 추론도 정지/재개. 시작 화면/캘리브레이션에서 다른 앱 전환 시
+        //추론 + 카메라 자원 낭비 방지. Pause/Play는 idempotent — 게임 모드 PauseApp/ClosePauseScreen 흐름과 안전 공존.
+        if (_baseRunner != null)
+        {
+            if (pause) _baseRunner.Pause();
+            else _baseRunner.Play();
+        }
+
         //포인트가 할당되지 않은 상태면 동작하지 않음
         if (points == null) return;
         //일시정지 동작
         PauseApp();
+    }
+
+    //focus 변경 hook — 메뉴 버튼/다른 앱 전환 시 OnApplicationPause가 발화하지 않을 수 있어 보조.
+    //flutter_embed_unity 라이프사이클 브리지 차이로 Pause가 누락되는 케이스에서도 focus는 거의 항상 잃음.
+    //AudioListener.pause / _baseRunner Pause/Play 대입은 idempotent이라 OnApplicationPause와 중복 호출되어도 안전.
+    private void OnApplicationFocus(bool hasFocus)
+    {
+        AudioListener.pause = !hasFocus;
+
+        if (_baseRunner != null)
+        {
+            if (!hasFocus) _baseRunner.Pause();
+            else _baseRunner.Play();
+        }
     }
 
     /// <summary>

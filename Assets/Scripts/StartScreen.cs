@@ -21,6 +21,8 @@ public class StartScreen : MonoBehaviour
     //실행 직후 호출되는 부분
     private void Awake()
     {
+        //Unity 진입 시 단계는 Selection(시작 화면). setter가 자동으로 Flutter로 stage 메시지 송신.
+        StaticData.stage = ExerciseStage.Selection;
         //정상종료 여부 로컬에서 값 가져옴
         isNormalEnd = PlayerPrefs.GetInt("NormalEnd");
         //비정상 종료라면
@@ -72,8 +74,8 @@ public class StartScreen : MonoBehaviour
             StaticData.isNormalEnd = false;
             //시작화면 끄기
             gameObject.SetActive(false);
-            //캘리브레이션 화면 키기
-            calibrationPanel.SetActive(true);
+            //이어하기 흐름도 가이드 화면부터 시작 (사용자 결정 — 캘리브레이션 직접 진입은 컨텍스트 손실).
+            gameGuidePanel.SetActive(true);
         }
     }
 
@@ -84,6 +86,11 @@ public class StartScreen : MonoBehaviour
     {
         //버튼 사운드 재생
         btnSound.Play();
+        //가이드/캘리브레이션 진입 시 카메라+추론 시작 — autoStart=false로 자동 Play 막힌 첫 시작 시점.
+        //이미 Play 중인 케이스(이전 게임 종료 후 재진입)는 LegacySolutionRunner.Play가 Stop+새 Run으로 처리.
+        if (pointsController != null) pointsController.StartMediapipe();
+        //단계: 시작 화면 → 가이드 진입.
+        StaticData.stage = ExerciseStage.Guide;
         //블럭밀기 상태 저장
         StaticData.isPairGame = false;
         //정상종료 여부를 로컬에서 가져옴
@@ -118,6 +125,10 @@ public class StartScreen : MonoBehaviour
     {
         //버튼 사운드 재생
         btnSound.Play();
+        //가이드/캘리브레이션 진입 시 카메라+추론 시작 — ClickBtn과 동일 패턴.
+        if (pointsController != null) pointsController.StartMediapipe();
+        //단계: 시작 화면 → 가이드 진입.
+        StaticData.stage = ExerciseStage.Guide;
         //짝맞추기 상태 저장
         StaticData.isPairGame = true;
         //정상종료 여부를 로컬에서 가져옴

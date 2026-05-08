@@ -13,6 +13,19 @@ public enum Mode
     Tutorial
 }
 
+//운동 진행 단계 — Flutter와 동기화하기 위한 전역 상태.
+//Selection=시작 화면(게임 선택), Guide=가이드, Calibration=스켈레톤 인식, Playing=게임 진행 중.
+//단계별로 background/resume 동작이 다름:
+//- Selection/Guide/Calibration: 운동 시작 전 → background 시 Flutter는 새로 시작 처리 (cancelled_pre_game)
+//- Playing: 운동 진행 중 → background 시 Flutter는 confirm 다이얼로그 → 이어하기 시 가이드부터 재진입
+public enum ExerciseStage
+{
+    Selection,
+    Guide,
+    Calibration,
+    Playing
+}
+
 //짝맞추기 열거형 타입
 public enum PairType
 {
@@ -55,6 +68,22 @@ public class StaticData : MonoBehaviour
     public static int level = 0;
     //목표 도달 시간
     public static float destTime = 5f;
+
+    //운동 진행 단계 (Selection/Guide/Calibration/Playing).
+    //setter에서 변경 시 Flutter로 stage 메시지 자동 송신 → unity_exercise_screen이 _currentStage 갱신.
+    private static ExerciseStage _stage = ExerciseStage.Selection;
+    public static ExerciseStage stage
+    {
+        get => _stage;
+        set
+        {
+            if (_stage != value)
+            {
+                _stage = value;
+                SendToFlutter.Send("{\"command\":\"stage\", \"stage\":\"" + value.ToString().ToLower() + "\"}");
+            }
+        }
+    }
 
     //세트별 점수
     public struct Scores

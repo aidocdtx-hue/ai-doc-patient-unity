@@ -12,6 +12,15 @@ public class GameGuide : MonoBehaviour
     //버튼 클릭 사운드
     public AudioSource sound;
 
+    //가이드 패널이 활성화되면 운동 단계를 Guide로 전환. setter가 Flutter로 자동 송신.
+    //StartScreen.ClickBtn에서도 stage=Guide로 set하지만, 이어하기 흐름(CheckLastPlayed)이나
+    //resume 흐름(ReturnToGameGuide)에서 ClickBtn을 거치지 않고 바로 gameGuidePanel.SetActive(true)
+    //되는 경로에 안전망.
+    private void OnEnable()
+    {
+        StaticData.stage = ExerciseStage.Guide;
+    }
+
 
     /// <summary>
     /// 다음 화면 버튼 이벤트

@@ -125,6 +125,8 @@ public class PairGame : MonoBehaviour
     //켜질 때 호출
     private void OnEnable()
     {
+        //단계: Playing. setter가 Flutter로 자동 송신. background 시 사용자에게 confirm 다이얼로그 노출.
+        StaticData.stage = ExerciseStage.Playing;
         //모드 변경
         StaticData.nowMode = Mode.Game;
         //캘리브레이션에서 킨 어깨 트리거 해제

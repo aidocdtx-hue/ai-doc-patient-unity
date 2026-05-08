@@ -12,7 +12,15 @@ public class SetMediapipeCamera : MonoBehaviour
 {
     //미디어파이프 스크립트 참조
     [SerializeField] private BaseRunner _baseRunner;
-    
+
+    //BaseRunner 자동 Play 막기 — 시작 화면(게임 선택)에서 카메라/추론 OFF 유지.
+    //Awake는 모든 컴포넌트 Awake 완료 후 Start 호출되므로 BaseRunner.Start의 if(_autoStart) 진입 전에 false 보장.
+    //가이드 진입 시 StartScreen.ClickBtn/ClickPairBtn → pointsController.StartMediapipe()에서 명시 Play.
+    void Awake()
+    {
+        if (_baseRunner != null) _baseRunner.autoStart = false;
+    }
+
     void Start()
     {
         //60프레임으로 고정
@@ -34,28 +42,33 @@ public class SetMediapipeCamera : MonoBehaviour
         
 #if UNITY_EDITOR
 #elif PLATFORM_ANDROID //안드로이드에서 카메라를 설정하는 부분
-//미디어파이프를 멈추고 이미지 소스를 전면카메라로 변경
-            _baseRunner.Pause();
+            //전면 카메라는 WebCamSource.Initialize()에서 default로 이미 선택되므로 SelectSource 호출 불필요.
+            //해상도 변경만 적용 — Pause→SelectResolution→Play 순환은 webCamTexture 재시작 비용을 동반하므로
+            //원하는 해상도가 device default와 같으면 Pause/Play 자체를 스킵해 흐림 구간을 추가로 제거.
             var imageSource = ImageSourceProvider.ImageSource;
-            imageSource.SelectSource(1);
-
-            //카메라의 해상도를 설정
-            var imageSource2 = ImageSourceProvider.ImageSource;
-            var resolutions = imageSource2.availableResolutions;
+            var resolutions = imageSource.availableResolutions;
             var options = resolutions.Select(resolution => resolution.ToString()).ToList();
-            int count = 0;
-            //옵션에서 원하는 해상도의 인덱스 찾기
+            int count = -1;
             for(int i = 0; i < options.Count; i++)
             {
                 if (options[i].Contains(StaticData.camaraResolution))
                 {
                     count = i;
+                    break;
                 }
             }
-            //원하는 옵션 반영
-            imageSource2.SelectResolution(count);
-            //미디어파이프 재실행
-            _baseRunner.Play();
+            if (count >= 0 && imageSource.resolution.ToString() != options[count])
+            {
+                _baseRunner.Pause();
+                imageSource.SelectResolution(count);
+                _baseRunner.Play();
+            }
+
+            //시작 화면 부하 절감용 _baseRunner.Pause() 제거 — WebCamSource.Pause가
+            //webCamTexture.Pause()까지 호출해 카메라 LED가 꺼졌다가 캘리브레이션 진입 시
+            //ResumeMediapipe로 다시 켜지면서 사용자 시각으로 카메라가 두 번 켜져 보임.
+            //시작 버튼은 Q 묶음에서 처음부터 활성화돼 있어 인식 게이트 의존 없음 →
+            //시작 화면 동안 추론이 계속 돌아도 버튼 응답성 영향 최소.
 #endif
 
         
