@@ -112,10 +112,14 @@ public class GetFlutterMessage : MonoBehaviour
             else if (splitedMessage[0].Contains("mute"))
             {
                 //Flutter가 운동 화면을 dispose하고 홈 등으로 navigate할 때 송신.
-                //Unity Player는 같은 Activity 안에서 계속 살아있어 OnApplicationPause가 발화 안 함 →
+                //Unity Player는 같은 Activity 안에 계속 살아있어 OnApplicationPause가 발화 안 함 →
                 //명시적으로 audio + MediaPipe 추론을 정지해 자원/소리 누수 방지.
+                //
+                //추가: ResetToInitial로 시작 화면 강제 복귀 — Unity 첫 frame이 시작 화면이라 사용자가
+                //다시 운동 화면 진입 시 직전 가이드/캘리브레이션/게임 화면 잔상 회피.
+                //ResetToInitial이 AudioListener.pause=false도 set하므로 그 후에 다시 true로 set.
+                if (pointsController != null) pointsController.ResetToInitial();
                 AudioListener.pause = true;
-                if (pointsController != null) pointsController.PauseApp();
             }
         }
         catch (System.Exception e)
