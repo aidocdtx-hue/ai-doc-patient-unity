@@ -70,6 +70,10 @@ public class StartScreen : MonoBehaviour
         }
         //StaticData.isNormalEnd는 PlayerPrefs("NormalEnd") 값에 따라 동기화 — 게임 측 isFirst 분기에 사용됨.
         StaticData.isNormalEnd = (isNormalEnd != 1);
+        //이어하기 진입 — 카메라/추론 시작. Y-2 후 BaseRunner.autoStart=false 상태이므로 명시 호출 필요.
+        //ClickBtn/ClickPairBtn(신규 시작)과 동일 패턴이지만 이어하기는 그 경로를 거치지 않으므로 누락되면
+        //카메라 OFF인 채로 가이드 → 캘리브레이션 진입 → 카메라 영상 없음 → 자세 인식 불가.
+        if (pointsController != null) pointsController.StartMediapipe();
         //시작화면 끄기
         gameObject.SetActive(false);
         //이어하기 흐름도 가이드 화면부터 시작 (사용자 결정 — 캘리브레이션 직접 진입은 컨텍스트 손실).
