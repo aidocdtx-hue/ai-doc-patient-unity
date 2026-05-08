@@ -92,6 +92,9 @@ public class StartScreen : MonoBehaviour
         if (pointsController != null) pointsController.StartMediapipe();
         //단계: 시작 화면 → 가이드 진입.
         StaticData.stage = ExerciseStage.Guide;
+        //LastPlayed PlayerPref 즉시 기록 — 게임 진입 못하고 종료해도 continue 흐름의 CheckLastPlayed가
+        //사용자 의도 복원 가능. BlockGame.OnEnable에서도 set하지만 그 전에 종료되면 직전 값 유지로 mismatch.
+        PlayerPrefs.SetString("LastPlayed", "Block");
         //블럭밀기 상태 저장
         StaticData.isPairGame = false;
         //정상종료 여부를 로컬에서 가져옴
@@ -130,6 +133,8 @@ public class StartScreen : MonoBehaviour
         if (pointsController != null) pointsController.StartMediapipe();
         //단계: 시작 화면 → 가이드 진입.
         StaticData.stage = ExerciseStage.Guide;
+        //LastPlayed PlayerPref 즉시 기록 — 게임 진입 못하고 종료해도 continue 흐름이 짝맞추기로 복원.
+        PlayerPrefs.SetString("LastPlayed", "Pair");
         //짝맞추기 상태 저장
         StaticData.isPairGame = true;
         //정상종료 여부를 로컬에서 가져옴
