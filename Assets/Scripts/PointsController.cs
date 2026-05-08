@@ -143,7 +143,7 @@ public class PointsController : MonoBehaviour
         _baseRunner.Play();
         //2초 대기, timescale이 0인 상태이므로 WaitForSecondsRealtime을 사용해야함
         yield return new WaitForSecondsRealtime(2f);
-        //일시정지 창 끄기
+        //일시정지 창 끄기 (dead path — Flutter SeniorDialog 통합 후 pauseScreen은 활성 안 됨)
         pauseScreen.SetActive(false);
         //시간을 다시 원래대로 설정
         //Time.timeScale = 1;
@@ -152,6 +152,8 @@ public class PointsController : MonoBehaviour
         calibrationPanel.SetActive(true);
         pairGamePanel.SetActive(false);
         blockGamePanel.SetActive(false);
+        //_isPaused 리셋 — 다음 PauseApp 호출 가능하게.
+        _isPaused = false;
     }
 
     //포인트가 화면 밖으로 나간 시간을 재기 위한 변수
@@ -326,6 +328,7 @@ public class PointsController : MonoBehaviour
 
         Time.timeScale = 1f;
         AudioListener.pause = false;
+        _isPaused = false;
         ResumeMediapipe();
     }
 
@@ -351,6 +354,7 @@ public class PointsController : MonoBehaviour
 
         Time.timeScale = 1f;
         AudioListener.pause = false;
+        _isPaused = false;
     }
 
     //앱이 백그라운드로 이동하면 Pause
@@ -391,20 +395,30 @@ public class PointsController : MonoBehaviour
     /// <summary>
     /// 일시정지 기능 부분
     /// </summary>
+    //_isPaused 가드 — pauseScreen 사용 안 하므로 activeInHierarchy 대신 별도 boolean으로
+    //중복 PauseApp 발화 차단. ClosePauseScreen에서 false로 리셋.
+    private bool _isPaused = false;
+    public bool IsAppPaused => _isPaused;
+
     public void PauseApp()
     {
         //게임모드가 아니면 동작하지 않음
         if (StaticData.nowMode != Mode.Game) return;
+        //이미 일시정지 상태면 중복 송신 회피
+        if (_isPaused) return;
+        _isPaused = true;
 
         //미디어파이프 정지
         _baseRunner.Pause();
         //유니티 시간을 흐르지않게 만듦
         Time.timeScale = 0;
-        //일시정지 화면 키기
-        pauseScreen.SetActive(true);
-        // SendToFlutter.Send("pause"); //250811 수정사항
+        //이전: pauseScreen.SetActive(true)로 Unity 자체 일시정지 화면 표시.
+        //변경(사용자 결정): Flutter SeniorDialog로 일시정지 UI 통합 — pause_request 메시지 송신.
+        //Flutter가 다이얼로그 표시 → 사용자 "재개" 시 pause_release 메시지 → GetFlutterMessage가 Resume() 호출.
+        //Flutter "운동 종료" 시 _abortExercise + navigate → UnityService.dispose → mute → ResetToInitial.
+        SendToFlutter.Send("{\"command\":\"pause_request\"}");
         //게임 모드에서 일시정지가 되면 각 포인트들의 데이터를 저장
-        if (StaticData.nowMode == Mode.Game) 
+        if (StaticData.nowMode == Mode.Game)
         {
             saveLandmarks.TempSaveDatas("pause");
         }

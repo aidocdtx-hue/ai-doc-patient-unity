@@ -68,6 +68,13 @@ public class GetFlutterMessage : MonoBehaviour
                     startScreen.CheckLastPlayed();
                 }
             }
+            else if (splitedMessage[0].Contains("pause_release"))
+            {
+                //Flutter SeniorDialog "재개" 선택 시 송신 (옵션 A — 일시정지 UI 통합).
+                //pointsController.Resume() → ClosePauseScreen 코루틴 시작 → MediaPipe Play +
+                //2초 대기 후 calibrationPanel 활성. 게임 그 자리부터가 아닌 캘리브레이션부터 다시.
+                if (pointsController != null) pointsController.Resume();
+            }
             else if (splitedMessage[0].Contains("pause"))
             {
                 //일시정지 호출
