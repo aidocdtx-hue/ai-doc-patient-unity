@@ -63,6 +63,11 @@ public class PairGame : MonoBehaviour
     bool nowLeft = true;
     bool isFirst = true;
 
+    //ADR-0011 §2.2 (사용자 결정 2026-05-11): 비정상종료 복원 케이스 추적.
+    //true면 Tutorial 끝의 timer.SetRamainTime(gameTime)이 line 195의 복원된 time을 덮어쓰지
+    //않도록 SKIP. OnEnable에서 false reset, line 148 분기에서 true set.
+    bool _restoredFromIncomplete = false;
+
     //타일이 나타나는 양 쪽 오브젝트 변수
     public GameObject leftSide;
     public GameObject rightSide;
@@ -148,6 +153,7 @@ public class PairGame : MonoBehaviour
             }
         }
         triggeredTutorial = true;
+        _restoredFromIncomplete = false;
 
         //각도 단계에 따라 움직이는 거리 조절
         sideMoveValue = sideMoveValue - 50 * level;
@@ -215,15 +221,17 @@ public class PairGame : MonoBehaviour
 
             //타이머에 남은 시간 적용
             timer.SetRamainTime(time);
-            timer.SetState(true);
+            //timer.SetState(true) ← 제거. Tutorial 동안 카운트다운 진행되면 만료 race 위험.
+            //Tutorial 끝에서 timer.SetState(true) 호출되어 그때 카운트다운 시작.
             //콜라이더 설정
             SetCollider();
             //처음상태 해제
             isFirst = false;
 
             //ADR-0011 §2.2 (사용자 결정 2026-05-11): 비정상종료 후 매 진입마다 튜토리얼 재생.
-            //복원 로직(PlayerPrefs 로드 + timer 재설정) 후 Tutorial 시작. Tutorial 끝의
-            //timer.SetRamainTime(gameTime)이 복원된 time을 덮어쓰는 한계는 후속 정밀화.
+            //_restoredFromIncomplete=true로 Tutorial 끝의 timer.SetRamainTime(gameTime)을 SKIP →
+            //복원된 time 보존 → "튜토리얼 먼저 → 끝나면 이어하기" 사용자 의도 정합.
+            _restoredFromIncomplete = true;
             StaticData.nowMode = Mode.Tutorial;
             StartCoroutine(Tutorial());
         }
@@ -520,9 +528,14 @@ public class PairGame : MonoBehaviour
         StaticData.nowMode = Mode.Game; 
         //비정상종료 상태로 저장
         PlayerPrefs.SetInt("NormalEnd", 1);
-        //타이머에 시간 할당
-        timer.SetRamainTime(gameTime);
-        //타이머에 게임시작 전달
+        //ADR-0011 §2.2: 비정상종료 복원이면 line 195의 복원된 time 유지 (gameTime 덮어쓰기 SKIP).
+        //정상 첫 진입이면 기존대로 gameTime으로 새 게임 시간 설정.
+        if (!_restoredFromIncomplete)
+        {
+            //타이머에 시간 할당
+            timer.SetRamainTime(gameTime);
+        }
+        //타이머에 게임시작 전달 (복원/신규 둘 다)
         timer.SetState(true);
         //가이드라인 움직이기 시작
         MoveGuideLine();

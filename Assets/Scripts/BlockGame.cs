@@ -54,6 +54,11 @@ public class BlockGame : MonoBehaviour
     //게임에 처음 진입하는지 판별하는 변수
     bool isFirst = true;
 
+    //ADR-0011 §2.2 (사용자 결정 2026-05-11): 비정상종료 복원 케이스 추적.
+    //true면 Tutorial 끝의 timer.SetRamainTime(gameTime)이 line 175의 복원된 time을 덮어쓰지
+    //않도록 SKIP. OnEnable에서 false reset, line 130 분기에서 true set.
+    bool _restoredFromIncomplete = false;
+
     //각 블록 영역의 오브젝트 참조
     public GameObject leftSide;
     public GameObject rightSide;
@@ -126,6 +131,7 @@ public class BlockGame : MonoBehaviour
         if (tutorialGuideLine != null) tutorialGuideLine.SetActive(false);
         if (tutorialCollider != null) tutorialCollider.enabled = false;
         triggeredTutorial = true;
+        _restoredFromIncomplete = false;
 
         //각도 단계별로 다른 위치에 있도록 위치 설정
         sideMoveValue = sideMoveValue - 130 * level;
@@ -191,11 +197,14 @@ public class BlockGame : MonoBehaviour
 
             //타이머에 남은 시간 적용
             timer.SetRamainTime(time);
-            timer.SetState(true);
+            //timer.SetState(true) ← 제거. Tutorial 동안 카운트다운 진행되면 만료 race 위험.
+            //Tutorial 끝(line 381)에서 timer.SetState(true) 호출되어 그때 카운트다운 시작.
 
             //ADR-0011 §2.2 (사용자 결정 2026-05-11): 비정상종료 후 매 진입마다 튜토리얼 재생.
-            //복원 로직(PlayerPrefs 로드 + timer 재설정) 후 Tutorial 시작. Tutorial 끝의 line 379
-            //timer.SetRamainTime(gameTime)이 위 line 175 복원된 time을 덮어쓰는 한계는 후속 정밀화.
+            //복원 로직(PlayerPrefs 로드 + timer 재설정) 후 Tutorial 시작.
+            //_restoredFromIncomplete=true로 Tutorial 끝의 timer.SetRamainTime(gameTime)을 SKIP →
+            //복원된 time 보존 → 사용자 의도("튜토리얼 먼저 → 끝나면 이어하기") 정합.
+            _restoredFromIncomplete = true;
             leftGrid.SetColliderState(false);
             rightGrid.SetColliderState(false);
             StaticData.nowMode = Mode.Tutorial;
@@ -401,9 +410,14 @@ public class BlockGame : MonoBehaviour
         //각 영역에 상태 전달
         leftGrid.SetFirst(false, false);
         rightGrid.SetFirst(false, false);
-        //타이머에 게임 시간 설정
-        timer.SetRamainTime(gameTime);
-        //타이머 시작
+        //ADR-0011 §2.2: 비정상종료 복원이면 line 175에서 복원된 time 유지 (gameTime 덮어쓰기 SKIP).
+        //정상 첫 진입이면 기존대로 gameTime으로 새 게임 시간 설정.
+        if (!_restoredFromIncomplete)
+        {
+            //타이머에 게임 시간 설정
+            timer.SetRamainTime(gameTime);
+        }
+        //타이머 시작 (복원/신규 둘 다)
         timer.SetState(true);
         //화살표 상태 왼쪽으로 변경
         leftArrow.sprite = arrowSprites[1];
