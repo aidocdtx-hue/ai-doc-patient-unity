@@ -9,6 +9,11 @@ public class GetFlutterMessage : MonoBehaviour
     private StartScreen startScreen;
     private PointsController pointsController;
 
+    //ADR-0011 §2.4: Start() 코루틴과 OnSceneLoaded(SceneManager.sceneLoaded 콜백)가 첫 진입에서
+    //둘 다 fire하면 scene_loaded가 376ms 간격으로 2회 송신됨(logcat 095159 PID 8488 검증).
+    //멱등 가드로 첫 송신만 유효화. 추가 씬 로드가 발생해도 이 인스턴스 lifetime 내 1회만.
+    private static bool _sceneLoadedSent = false;
+
     private void Start()
     {
         startScreen = FindAnyObjectByType<StartScreen>();
@@ -23,6 +28,14 @@ public class GetFlutterMessage : MonoBehaviour
     private IEnumerator NotifySceneLoadedWhenReady()
     {
         yield return null;
+        SendSceneLoadedOnce();
+    }
+
+    //ADR-0011 §2.4 멱등 가드. Start()와 OnSceneLoaded 양쪽에서 호출 가능.
+    private static void SendSceneLoadedOnce()
+    {
+        if (_sceneLoadedSent) return;
+        _sceneLoadedSent = true;
         SendToFlutter.Send("scene_loaded");
     }
 
@@ -57,14 +70,23 @@ public class GetFlutterMessage : MonoBehaviour
             }
             else if (splitedMessage[0].Contains("continue"))
             {
-                //재시작
+                //재시작 — ADR-0011 §2.2: 운동 record(destTime/level)는 유지, 튜토리얼은 처음부터.
                 if (TryParseTimeAndLevel(splitedMessage, out float destTime, out int level))
                 {
                     StaticData.destTime = destTime;
                     StaticData.level = level;
-                    //이전 백그라운드 진입에서 mute된 경우 복원. ResetToInitial은 호출하지 않음 —
-                    //continue는 직전 게임 상태를 그대로 이어가야 하므로 패널/StaticData 리셋 금지.
+
+                    //이전 백그라운드 진입에서 mute된 경우 복원.
                     AudioListener.pause = false;
+
+                    //ADR-0011 §2.2: continue는 운동 record를 이어가지만 Unity 시나리오는 처음부터.
+                    //직전 stage/calibration 진행도가 메모리에 남아 "이어하기" 시 가이드 영상이
+                    //중간부터 재생되거나 calibration이 중간 상태에서 시작되던 결함 해소.
+                    //흐름: ResetToInitial(패널 모두 닫고 시작 화면 초기 상태) → CheckLastPlayed(직전
+                    //LastPlayed PlayerPref로 isPairGame 복원 + 시작 화면 비활성 + gameGuidePanel 활성
+                    //+ Mediapipe Start). 한 프레임에 처리되어 사용자에겐 시작 화면 깜빡임 없음.
+                    //ResetToInitial이 AudioListener.pause=false도 set하므로 위 unmute는 idempotent.
+                    if (pointsController != null) pointsController.ResetToInitial();
                     startScreen.CheckLastPlayed();
                 }
             }
@@ -122,10 +144,14 @@ public class GetFlutterMessage : MonoBehaviour
                 //Unity Player는 같은 Activity 안에 계속 살아있어 OnApplicationPause가 발화 안 함 →
                 //명시적으로 audio + MediaPipe 추론을 정지해 자원/소리 누수 방지.
                 //
-                //추가: ResetToInitial로 시작 화면 강제 복귀 — Unity 첫 frame이 시작 화면이라 사용자가
-                //다시 운동 화면 진입 시 직전 가이드/캘리브레이션/게임 화면 잔상 회피.
-                //ResetToInitial이 AudioListener.pause=false도 set하므로 그 후에 다시 true로 set.
+                //ADR-0011 §2.3: dispose 시 카메라 close 순서 정리.
+                //- ResetToInitial: 시작 화면 패널 복귀(AudioListener.pause=false도 포함).
+                //- PauseMediapipe: MediaPipe runner + WebCamTexture 정지(카메라 LED OFF + race 차단).
+                //- AudioListener.pause = true: ResetToInitial이 false로 되돌린 걸 다시 mute.
+                //옵션 B(SceneManager.LoadScene) 폐기 사유: 1.5–3초 비용 + 튜토리얼 reset은
+                //§2.2의 continue 분기에서 별도 처리하는 게 더 명확.
                 if (pointsController != null) pointsController.ResetToInitial();
+                if (pointsController != null) pointsController.PauseMediapipe();
                 AudioListener.pause = true;
             }
         }
@@ -186,7 +212,9 @@ public class GetFlutterMessage : MonoBehaviour
     void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         Debug.LogWarning("GetFlutterMessage OnSceneLoaded");
-        SendToFlutter.Send("scene_loaded");
+        //ADR-0011 §2.4: Start()의 NotifySceneLoadedWhenReady와 멱등 가드 공유.
+        //씬 첫 진입에선 둘 다 fire되지만 SendSceneLoadedOnce가 1회만 송신.
+        SendSceneLoadedOnce();
     }
 
     void OnDisable()
