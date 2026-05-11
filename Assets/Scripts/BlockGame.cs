@@ -144,10 +144,24 @@ public class BlockGame : MonoBehaviour
     //활성 상태 잔존 가능 — 명시 비활성으로 정리. OnEnable의 초기화와 짝.
     private void OnDisable()
     {
+        Debug.Log($"[BlockGame.OnDisable] isFirst={isFirst} _restoredFromIncomplete={_restoredFromIncomplete} isNormalEnd={StaticData.isNormalEnd} dim={(dim != null && dim.activeSelf)} tutorialGuideLine={(tutorialGuideLine != null && tutorialGuideLine.activeSelf)}");
         StopAllCoroutines();
         if (dim != null) dim.SetActive(false);
         if (tutorialGuideLine != null) tutorialGuideLine.SetActive(false);
     }
+
+    //=== PlayMode 테스트 helper (ADR-0011 검증용) ============================
+    [ContextMenu("Log/Block State")]
+    private void LogBlockState()
+    {
+        Debug.Log($"[BlockGame.State] isFirst={isFirst} _restoredFromIncomplete={_restoredFromIncomplete} isNormalEnd={StaticData.isNormalEnd} stage={StaticData.stage} mode={StaticData.nowMode} triggeredTutorial={triggeredTutorial} dim={(dim != null && dim.activeSelf)} tutorialText='{(tutorialText != null ? tutorialText.text : "<null>")}'");
+    }
+
+    [ContextMenu("Force Disable (dispose 시뮬)")]
+    private void ForceDisable() => gameObject.SetActive(false);
+
+    [ContextMenu("Force Enable (재진입 시뮬)")]
+    private void ForceEnable() => gameObject.SetActive(true);
 
     void Initalize()
     {

@@ -219,4 +219,27 @@ public class GetFlutterMessage : MonoBehaviour
         Debug.LogWarning("GetFlutterMessage OnDisable");
         SceneManager.sceneLoaded -= OnSceneLoaded;
     }
+
+    //=== PlayMode 테스트 helpers (ADR-0011 검증용) ============================
+    //Unity Editor PlayMode에서 Inspector → Solution GameObject → GetFlutterMessage component
+    //→ 우측 ⋮ 메뉴 또는 우클릭 → 아래 ContextMenu 항목 선택으로 Flutter 메시지 시뮬레이션.
+    //디바이스/adb 없이 Tutorial/dispose/재진입 흐름 검증 가능.
+
+    [ContextMenu("Sim/Start (time=60, level=1)")]
+    private void SimulateStart() => RecieveMessage("start,time:60.0,level:1");
+
+    [ContextMenu("Sim/Continue (time=30, level=1)")]
+    private void SimulateContinue() => RecieveMessage("continue,time:30.0,level:1");
+
+    [ContextMenu("Sim/Mute (dispose 진입)")]
+    private void SimulateMute() => RecieveMessage("mute");
+
+    [ContextMenu("Sim/Background")]
+    private void SimulateBackground() => RecieveMessage("background");
+
+    [ContextMenu("Sim/Resume")]
+    private void SimulateResume() => RecieveMessage("resume");
+
+    [ContextMenu("Sim/Pause")]
+    private void SimulatePause() => RecieveMessage("pause");
 }
