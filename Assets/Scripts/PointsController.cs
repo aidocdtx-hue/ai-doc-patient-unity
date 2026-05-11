@@ -307,6 +307,30 @@ public class PointsController : MonoBehaviour
     public void StartMediapipe()
     {
         if (_baseRunner != null) _baseRunner.Play();
+        if (!_cameraReadyPending) StartCoroutine(NotifyCameraReadyAfterStart());
+    }
+
+    //ADR-0011 §2.1: 카메라 ACTIVE 시점 신호 송신.
+    //logcat (PID 22286, 2026-05-11 11:43) 측정상 scene_loaded 발화 후 카메라 OPEN까지 ~9초 갭.
+    //Flutter 측 1초 timer로는 부족 → 인디케이터 사라진 후 멈춘 frame 노출. 이 coroutine이
+    //StartMediapipe 호출 후 카메라/MediaPipe runner 시작까지 wait + Flutter에 camera_ready 송신.
+    //
+    //시간 기반 7초 마진 — BaseRunner internal imageSource 정확한 첫 frame hook은 MediaPipe 패키지
+    //수정 필요해 후속 정밀화. Flutter 측 2초 fallback timer가 추가 안전망.
+    //_cameraReadyPending 가드 — 동시 중복 송신 방지(매 진입마다 false로 reset되어 재진입에도 동작).
+    private bool _cameraReadyPending = false;
+    private IEnumerator NotifyCameraReadyAfterStart()
+    {
+        _cameraReadyPending = true;
+        try
+        {
+            yield return new WaitForSeconds(7f);
+            SendToFlutter.Send("camera_ready");
+        }
+        finally
+        {
+            _cameraReadyPending = false;
+        }
     }
 
     /// <summary>

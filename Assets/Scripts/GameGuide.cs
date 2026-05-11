@@ -17,10 +17,13 @@ public class GameGuide : MonoBehaviour
     //resume 흐름(ReturnToGameGuide)에서 ClickBtn을 거치지 않고 바로 gameGuidePanel.SetActive(true)
     //되는 경로에 안전망.
     //
-    //ADR-0011 §2.2 강화: 가이드 패널 재활성 시 항상 첫 페이지(pages[0])부터 시작.
-    //이어하기로 재진입한 사용자가 튜토리얼 페이지 N에서 dispose 후 다시 들어와도 페이지 0부터.
-    //GetFlutterMessage.continue 분기의 ResetToInitial+CheckLastPlayed는 패널 토글만 처리하므로
-    //gameGuidePanel 내부 페이지 인덱스 reset은 이 OnEnable에서 책임.
+    //ADR-0011 §2.2 강화: 가이드 패널 재활성 시 항상 첫 페이지(pages[0])부터 시작 + VideoPlayer reset.
+    //
+    //증상 (2026-05-11 추가): 페이지 인덱스 reset만으로는 튜토리얼이 페이지 N에서 멈춘 상태 잔존 —
+    //원인은 페이지 안 VideoPlayer가 dispose 시 paused 위치로 남고 SetActive(false→true) 토글로는
+    //자동 재생 안 됨. Unity VideoPlayer는 명시 Stop+time=0+Play 시퀀스 필요.
+    //
+    //pages[0]의 모든 자식 VideoPlayer를 강제 reset → 첫 페이지 영상이 처음부터 재생.
     private void OnEnable()
     {
         StaticData.stage = ExerciseStage.Guide;
@@ -30,6 +33,18 @@ public class GameGuide : MonoBehaviour
             for (int i = 0; i < pages.Length; i++)
             {
                 if (pages[i] != null) pages[i].SetActive(i == 0);
+            }
+
+            if (pages[0] != null)
+            {
+                var videoPlayers = pages[0].GetComponentsInChildren<UnityEngine.Video.VideoPlayer>(true);
+                foreach (var vp in videoPlayers)
+                {
+                    if (vp == null) continue;
+                    vp.Stop();
+                    vp.time = 0;
+                    vp.Play();
+                }
             }
         }
     }
