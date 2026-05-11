@@ -126,17 +126,14 @@ public class GetFlutterMessage : MonoBehaviour
             else if (splitedMessage[0].Contains("resume"))
             {
                 //앱 포그라운드 복귀 시 사용자가 confirm 다이얼로그에서 "계속하기" 선택 후 송신.
-                //단계별 분기:
-                //- Selection: 시작 화면 그대로 유지 (카메라/추론 미시작 상태 — Y-2 패턴). 사운드 unmute만.
-                //- Guide/Calibration/Playing: ReturnToGameGuide로 가이드부터 다시 시작 (사용자 결정).
-                if (StaticData.stage == ExerciseStage.Selection)
-                {
-                    AudioListener.pause = false;
-                }
-                else
-                {
-                    if (pointsController != null) pointsController.ReturnToGameGuide();
-                }
+                //
+                //사용자 결정 (2026-05-11): "앱 외부로 전환(홈버튼)시 게임 중에 스켈레톤 화면으로 넘어가는
+                //경우가 있는데 이거 그냥 기능 빼줘" — 자동 화면 전환(ReturnToGameGuide → gameGuidePanel)
+                //제거. 모든 단계(Selection/Guide/Calibration/Playing)에서 sound unmute만 처리하고
+                //패널 전환은 안 함. 사용자가 background 진입 직전 보던 화면 그대로 유지.
+                //ResumeMediapipe는 호출 안 함 — playing 상태였으면 PauseMediapipe로 paused 상태인데
+                //사용자가 명시 행동(다음 버튼 또는 운동 재개 액션) 시 게임 흐름이 자연스럽게 재개.
+                AudioListener.pause = false;
             }
             else if (splitedMessage[0].Contains("mute"))
             {
