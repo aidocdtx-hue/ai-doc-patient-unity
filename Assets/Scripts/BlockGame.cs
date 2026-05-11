@@ -114,12 +114,33 @@ public class BlockGame : MonoBehaviour
         //단계: Playing. setter가 Flutter로 자동 송신. background 시 사용자에게 confirm 다이얼로그 노출.
         StaticData.stage = ExerciseStage.Playing;
         StaticData.nowMode = Mode.Game; //모드 변경
+        //매 진입(이어하기/재진입 포함)에 튜토리얼 다시 실행 — 사용자 결정.
+        //Initalize에서 line 200이 다시 false로 set하므로 line 548의 if(!isFirst) 가드는 영향 없음.
+        isFirst = true;
         pointsController.SetPointTrigger(); //캘리브레이션에서 킨 어깨 트리거 해제
+
+        //ADR-0011 §2.2 (사용자 결정 2026-05-11): 이전 dispose 시 잔존한 튜토리얼 UI 정리.
+        //GameObject.SetActive(false)로 코루틴은 자동 stop되지만 dim/tutorialGuideLine은
+        //별도 parent일 수 있어 잔존 가능. 매 OnEnable에서 명시 초기화.
+        if (dim != null) dim.SetActive(false);
+        if (tutorialGuideLine != null) tutorialGuideLine.SetActive(false);
+        if (tutorialCollider != null) tutorialCollider.enabled = false;
+        triggeredTutorial = true;
 
         //각도 단계별로 다른 위치에 있도록 위치 설정
         sideMoveValue = sideMoveValue - 130 * level;
-        
-        
+
+
+    }
+
+    //ADR-0011 §2.2: dispose 시 명시 코루틴 stop + UI 잔존 정리.
+    //GameObject 비활성 시 Unity가 코루틴 자동 stop하지만 dim 등 child가 다른 parent에 있으면
+    //활성 상태 잔존 가능 — 명시 비활성으로 정리. OnEnable의 초기화와 짝.
+    private void OnDisable()
+    {
+        StopAllCoroutines();
+        if (dim != null) dim.SetActive(false);
+        if (tutorialGuideLine != null) tutorialGuideLine.SetActive(false);
     }
 
     void Initalize()
@@ -171,6 +192,14 @@ public class BlockGame : MonoBehaviour
             //타이머에 남은 시간 적용
             timer.SetRamainTime(time);
             timer.SetState(true);
+
+            //ADR-0011 §2.2 (사용자 결정 2026-05-11): 비정상종료 후 매 진입마다 튜토리얼 재생.
+            //복원 로직(PlayerPrefs 로드 + timer 재설정) 후 Tutorial 시작. Tutorial 끝의 line 379
+            //timer.SetRamainTime(gameTime)이 위 line 175 복원된 time을 덮어쓰는 한계는 후속 정밀화.
+            leftGrid.SetColliderState(false);
+            rightGrid.SetColliderState(false);
+            StaticData.nowMode = Mode.Tutorial;
+            StartCoroutine(Tutorial());
         }
         //비정상종료가 아닌 첫 실행이라면
         else if (isFirst)

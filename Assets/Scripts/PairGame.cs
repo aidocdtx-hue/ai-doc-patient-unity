@@ -129,12 +129,37 @@ public class PairGame : MonoBehaviour
         StaticData.stage = ExerciseStage.Playing;
         //모드 변경
         StaticData.nowMode = Mode.Game;
+        //매 진입(이어하기/재진입 포함)에 튜토리얼 다시 실행 — 사용자 결정.
+        //Initalize에서 line 501이 다시 false로 set하므로 line 933의 if(!isFirst) 가드는 영향 없음.
+        isFirst = true;
         //캘리브레이션에서 킨 어깨 트리거 해제
         pointsController.SetPointTrigger();
 
+        //ADR-0011 §2.2 (사용자 결정 2026-05-11): 이전 dispose 시 잔존한 튜토리얼 UI 정리.
+        //GameObject.SetActive(false)로 코루틴은 자동 stop되지만 dim/tutorialGuideLine은
+        //별도 parent일 수 있어 잔존 가능. 매 OnEnable에서 명시 초기화.
+        if (dim != null) dim.SetActive(false);
+        if (tutorialGuideLine != null) tutorialGuideLine.SetActive(false);
+        if (tutorialColliders != null)
+        {
+            foreach (var c in tutorialColliders)
+            {
+                if (c != null) c.enabled = false;
+            }
+        }
+        triggeredTutorial = true;
+
         //각도 단계에 따라 움직이는 거리 조절
         sideMoveValue = sideMoveValue - 50 * level;
-        
+
+    }
+
+    //ADR-0011 §2.2: dispose 시 명시 코루틴 stop + UI 잔존 정리. OnEnable과 짝.
+    private void OnDisable()
+    {
+        StopAllCoroutines();
+        if (dim != null) dim.SetActive(false);
+        if (tutorialGuideLine != null) tutorialGuideLine.SetActive(false);
     }
 
     //게임 시작 단계
@@ -195,9 +220,15 @@ public class PairGame : MonoBehaviour
             SetCollider();
             //처음상태 해제
             isFirst = false;
+
+            //ADR-0011 §2.2 (사용자 결정 2026-05-11): 비정상종료 후 매 진입마다 튜토리얼 재생.
+            //복원 로직(PlayerPrefs 로드 + timer 재설정) 후 Tutorial 시작. Tutorial 끝의
+            //timer.SetRamainTime(gameTime)이 복원된 time을 덮어쓰는 한계는 후속 정밀화.
+            StaticData.nowMode = Mode.Tutorial;
+            StartCoroutine(Tutorial());
         }
         //정상종료에 첫 실행이면
-        else if (isFirst) 
+        else if (isFirst)
         {
             //튜토리얼 모드로 변경
             StaticData.nowMode = Mode.Tutorial;
