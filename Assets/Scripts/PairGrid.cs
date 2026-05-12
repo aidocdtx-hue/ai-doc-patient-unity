@@ -82,6 +82,18 @@ public class PairGrid : MonoBehaviour
         {
             col.enabled = false;
         }
+        //ADR-0011 §2.2 (사용자 결정 2026-05-12, 추가): 진행 중 DOTween 정리.
+        //Triggered의 DOMove(dest)/Correct의 DOScale(0.5 yoyo)/DestEffect의 DOScale(0)/내부
+        //animalImage의 DOShakePosition 등 mute 시점에 진행 중이던 tween이 RebuildGrid 후에도
+        //계속 fire하면 SelectObject가 (10000,10000)에서 가져온 prefab의 위치/scale을 덮어씀.
+        //전 자식 + 그 child의 모든 tween kill로 stale 상태 차단.
+        DOTween.Kill("Shake");
+        DOTween.Kill("moveGuideLine");
+        foreach (Transform child in transform)
+        {
+            DOTween.Kill(child);
+            if (child.childCount > 0) DOTween.Kill(child.GetChild(0));
+        }
         //기존 자식 타일들 모두 tileParent로 보냄 + (10000,10000) 위치 → SelectObject 풀링에서
         //재선택 가능 상태로
         while (transform.childCount > 0)
@@ -89,6 +101,8 @@ public class PairGrid : MonoBehaviour
             Transform temp = transform.GetChild(0);
             temp.SetParent(tileParent);
             temp.localPosition = new Vector3(10000, 10000, 0);
+            //scale도 명시 reset — DOScale 진행 중이던 객체가 scale=0 잔존 회피.
+            temp.localScale = Vector3.one;
         }
         //grid 배열 reset
         grid = new PairObject[width, height];
@@ -294,6 +308,20 @@ public class PairGrid : MonoBehaviour
                 //잔존한 prefab이 grid에 들어가면 일부 동물(예: 돼지)의 sprites[1/2]이 null인
                 //케이스 visual 빠짐. 매 GenerateGrid에 명시 sprites[0] 기본 상태로 reset.
                 grid[i, j].SetSprite(0);
+                //ADR-0011 §2.2 (사용자 결정 2026-05-12, 추가): 진짜 원인 — Correct→DestEffect의
+                //DOScale(0) tween이 mute 시점에 중단되면 localScale=0 잔존 → 풀에서 가져온
+                //prefab이 보이지 않음. 또한 DOMove로 dest 위치로 이동한 동물의 localPosition도
+                //stale → grid 배치가 첫 진입과 달라짐. 매 GenerateGrid에 명시 reset.
+                DOTween.Kill(block.transform);
+                if (block.transform.childCount > 0)
+                {
+                    DOTween.Kill(block.transform.GetChild(0));
+                    block.transform.GetChild(0).localPosition = Vector3.zero;
+                    block.transform.GetChild(0).localScale = Vector3.one;
+                }
+                block.transform.localScale = Vector3.one;
+                //localPosition은 GridLayoutGroup이 자동 배치하므로 zero로 reset 후 layout에 위임.
+                block.transform.localPosition = Vector3.zero;
             }
         }
     }
