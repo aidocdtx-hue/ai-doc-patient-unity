@@ -88,6 +88,11 @@ public class PairGame : MonoBehaviour
     //각도 단계
     int level = 0;
 
+    //ADR-0011 §2.2 (사용자 결정 2026-05-12): Awake에서 leftSide/rightSide 초기 localPosition 캐싱.
+    //OnEnable에서 매 재진입마다 이 값으로 reset하여 SetGameObjectsFade(1f) DOTween 누적 어긋남 회피.
+    Vector3 _leftSideInitialPos;
+    Vector3 _rightSideInitialPos;
+
     //초기 설정
     private void Awake()
     {
@@ -96,6 +101,9 @@ public class PairGame : MonoBehaviour
         //각도와 도달시간 받아와서 설정
         level = StaticData.level;
         lineMoveDuration = StaticData.destTime;
+        //leftSide/rightSide 초기 위치 캐싱 (씬 인스펙터 할당 시점의 transform)
+        if (leftSide != null) _leftSideInitialPos = leftSide.transform.localPosition;
+        if (rightSide != null) _rightSideInitialPos = rightSide.transform.localPosition;
     }
 
     //초기 설정2 (위 보다 늦게 실행되는 부분)
@@ -157,18 +165,33 @@ public class PairGame : MonoBehaviour
         triggeredTutorial = true;
         _restoredFromIncomplete = false;
 
-        //각도 단계에 따라 움직이는 거리 조절
-        sideMoveValue = sideMoveValue - 50 * level;
+        //ADR-0011 §2.2 (사용자 결정 2026-05-12): sideMoveValue를 매 OnEnable마다 절대값으로 reset.
+        //이전엔 매번 -50*level 차감되어 재진입 누적시 0 또는 음수가 되며 SetGameObjectsFade 방향 반전.
+        //초기값 600(씬에서 정의된 sideMoveValue 기본값)에서 level만큼 차감해 동일 결과.
+        sideMoveValue = 600f - 50 * level;
 
         Debug.Log($"[PairGame.OnEnable] isFirst={isFirst} _startedOnce={_startedOnce} isNormalEnd={StaticData.isNormalEnd}");
 
-        //ADR-0011 §2.2 (logcat-tutorial-verify-20260512-090948 분석): Start()는 Unity 생명주기상
-        //첫 활성화에만 호출됨. 재진입(SetActive false→true cycle)에선 OnEnable만 fire하고
-        //Start()는 skip → SetGameObjectsFade(1f)의 DOTween OnComplete 안에 있는 Initalize() 미호출
-        //→ isFirst=true 분기 미진입 → Tutorial 코루틴 미시작 → dim/tutorialGuideLine 안 켜짐.
-        //재진입에선 fade-in DOTween 없이 즉시 Initalize 호출해 Tutorial 흐름 보장.
-        //첫 진입(Start 경로)은 그대로 유지 — fade-in 효과 살림.
-        if (_startedOnce) Initalize();
+        //ADR-0011 §2.2 (사용자 결정 2026-05-12): 재진입 시 전체 초기화 로직 강화.
+        //원인: Unity 생명주기상 Start()는 첫 활성화에만 호출 → SetGameObjectsFade(1f)/grid 생성/
+        //guideLine 위치 reset 등 모두 미트리거. dispose 시점의 stale 상태(leftSide/rightSide 위치,
+        //타일 풀링 위치, guideLine 위치 등) 잔존.
+        if (_startedOnce)
+        {
+            //leftSide/rightSide localPosition을 Awake에서 캐싱한 초기값으로 reset.
+            //이전 SetGameObjectsFade(1f) 누적 이동으로 화면 밖에 머문 케이스 방지.
+            if (leftSide != null) leftSide.transform.localPosition = _leftSideInitialPos;
+            if (rightSide != null) rightSide.transform.localPosition = _rightSideInitialPos;
+            //가이드라인 중앙 reset — 게임 진행 중 좌우 이동 후 dispose 시점 위치 잔존 방지.
+            if (guideLine != null) guideLine.transform.localPosition = Vector3.zero;
+            //leftGrid/rightGrid 타일 재생성 — PairGrid.Start의 GenerateGrid가 첫 활성화만이라
+            //재진입시 grid 배열 stale + 일부 타일이 (10000,10000)에 머무는 케이스 방지.
+            if (leftGrid != null) leftGrid.RebuildGrid();
+            if (rightGrid != null) rightGrid.RebuildGrid();
+            //SetGameObjectsFade(1f) 호출로 fade-in DOTween + OnComplete에서 Initalize() 호출.
+            //첫 진입(Start 경로)과 동일 흐름 — Tutorial/PlayerPrefs 복원 일관성.
+            SetGameObjectsFade(1f);
+        }
     }
 
     //ADR-0011 §2.2: 첫 진입(Start)과 재진입(OnEnable)의 Initalize 트리거 분기 가드.

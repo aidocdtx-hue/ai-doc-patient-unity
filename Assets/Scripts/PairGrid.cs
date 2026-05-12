@@ -70,6 +70,41 @@ public class PairGrid : MonoBehaviour
         Invoke("Initialize", 1f);
     }
 
+    /// <summary>
+    /// ADR-0011 §2.2 (사용자 결정 2026-05-12): 재진입 시 GenerateGrid 미트리거 + 자식 타일들이
+    /// 직전 dispose 시점 위치(일부는 (10000,10000)) 그대로 잔존 → 동물 표시 안 됨. ResetGrid는
+    /// DOTween 1.25초 + OnComplete 비동기라 Tutorial과 race. 이 메서드는 DOTween 없이 즉시
+    /// 동기로 grid 재생성. PairGame.OnEnable에서 호출.
+    /// </summary>
+    public void RebuildGrid()
+    {
+        foreach (Collider col in colliders)
+        {
+            col.enabled = false;
+        }
+        //기존 자식 타일들 모두 tileParent로 보냄 + (10000,10000) 위치 → SelectObject 풀링에서
+        //재선택 가능 상태로
+        while (transform.childCount > 0)
+        {
+            Transform temp = transform.GetChild(0);
+            temp.SetParent(tileParent);
+            temp.localPosition = new Vector3(10000, 10000, 0);
+        }
+        //grid 배열 reset
+        grid = new PairObject[width, height];
+        //GridLayoutGroup 켜서 자동 배치 받음
+        GetComponent<GridLayoutGroup>().enabled = true;
+        //타일 생성 (풀에서 round-robin 가져옴)
+        GenerateGrid();
+        //레이아웃 강제 재계산
+        LayoutRebuilder.ForceRebuildLayoutImmediate(transform.GetComponent<RectTransform>());
+        //GridLayoutGroup 끄기 — 이후 게임 흐름에서 자유 배치
+        GetComponent<GridLayoutGroup>().enabled = false;
+        //Initialize 호출과 같은 효과 (idempotent)
+        CancelInvoke("Initialize");
+        Invoke("Initialize", 1f);
+    }
+
     //게임 준비단계
     void Initialize()
     {
