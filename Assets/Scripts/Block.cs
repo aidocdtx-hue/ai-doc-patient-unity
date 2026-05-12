@@ -30,6 +30,15 @@ public class Block : MonoBehaviour
     /// <param name="i">0 : 보통, 1 : 찡그린 표정, 2 : 터지기 직전 표정</param>
     public void SetSprite(int i)
     {
-        animalImage.sprite = sprites[i];
+        //ADR-0011 §2.2 (사용자 결정 2026-05-12): animalImage 미할당 가드.
+        //GridController.GenerateGrid에서 SetSprite(0) 명시 호출 시 Start 이전 발생 가능.
+        if (animalImage == null && transform.childCount > 0)
+        {
+            animalImage = transform.GetChild(0).GetComponent<Image>();
+        }
+        if (animalImage != null && sprites != null && i >= 0 && i < sprites.Length)
+        {
+            animalImage.sprite = sprites[i];
+        }
     }
 }

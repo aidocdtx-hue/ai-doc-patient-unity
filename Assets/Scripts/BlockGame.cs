@@ -71,6 +71,16 @@ public class BlockGame : MonoBehaviour
     public AudioClip blockBGM;
     
     //게임시작시 초기셋팅을 해 주는 부분
+    //ADR-0011 §2.2 (사용자 결정 2026-05-12): BlockGame도 PairGame과 동일 패턴 — Awake에서
+    //leftSide/rightSide/leftArrow/rightArrow/tempObject 초기 상태 캐싱. OnEnable 재진입 분기에서
+    //이 값으로 reset해 누적 어긋남/잔존 활성 회피.
+    Vector3 _leftSideInitialPos;
+    Vector3 _rightSideInitialPos;
+    Vector3 _leftArrowInitialPos;
+    Vector3 _rightArrowInitialPos;
+    Vector3[] _tempObjectInitialPos;
+    bool[] _tempObjectInitialActive;
+
     private void Awake()
     {
         //랜드마크 저장 타이머 설정
@@ -80,6 +90,24 @@ public class BlockGame : MonoBehaviour
         level = StaticData.level;
         lineMoveDuration = StaticData.destTime;
 
+        //초기 위치 캐싱 — OnEnable의 _startedOnce 분기에서 매 재진입마다 이 값으로 reset.
+        if (leftSide != null) _leftSideInitialPos = leftSide.transform.localPosition;
+        if (rightSide != null) _rightSideInitialPos = rightSide.transform.localPosition;
+        if (leftArrow != null) _leftArrowInitialPos = leftArrow.transform.localPosition;
+        if (rightArrow != null) _rightArrowInitialPos = rightArrow.transform.localPosition;
+        if (tempObject != null)
+        {
+            _tempObjectInitialPos = new Vector3[tempObject.Length];
+            _tempObjectInitialActive = new bool[tempObject.Length];
+            for (int i = 0; i < tempObject.Length; i++)
+            {
+                if (tempObject[i] != null)
+                {
+                    _tempObjectInitialPos[i] = tempObject[i].transform.localPosition;
+                    _tempObjectInitialActive[i] = tempObject[i].activeSelf;
+                }
+            }
+        }
     }
 
     //게임시작 초기 세팅2 (위 보다 나중에 호출됨)
@@ -138,18 +166,60 @@ public class BlockGame : MonoBehaviour
         triggeredTutorial = true;
         _restoredFromIncomplete = false;
 
-        //각도 단계별로 다른 위치에 있도록 위치 설정
-        sideMoveValue = sideMoveValue - 130 * level;
+        //ADR-0011 §2.2 (사용자 결정 2026-05-12): sideMoveValue를 매 OnEnable마다 절대값으로 reset.
+        //이전엔 매번 -130*level 차감되어 재진입 누적시 0/음수가 되어 fade-in 방향 반전.
+        //초기값 670(GridController/씬 인스펙터 기준)에서 level만큼 차감해 동일 결과.
+        sideMoveValue = 670f - 130 * level;
 
         Debug.Log($"[BlockGame.OnEnable] isFirst={isFirst} _startedOnce={_startedOnce} isNormalEnd={StaticData.isNormalEnd}");
 
-        //ADR-0011 §2.2 (logcat-tutorial-verify-20260512-090948 분석): Start()는 Unity 생명주기상
-        //첫 활성화에만 호출됨. 재진입(SetActive false→true cycle)에선 OnEnable만 fire하고
-        //Start()는 skip → SetGameObjectsFade(1f)의 DOTween OnComplete 안에 있는 Initalize() 미호출
-        //→ isFirst=true 분기 미진입 → Tutorial 코루틴 미시작 → dim/tutorialGuideLine 안 켜짐.
-        //재진입에선 fade-in DOTween 없이 즉시 Initalize 호출해 Tutorial 흐름 보장.
-        //첫 진입(Start 경로)은 그대로 유지 — fade-in 효과 살림.
-        if (_startedOnce) Initalize();
+        //ADR-0011 §2.2 (사용자 결정 2026-05-12): PairGame과 동일한 광범위 재진입 reset 흐름.
+        //Unity 생명주기상 Start()는 첫 활성화만 → 재진입 시 leftSide/leftArrow/grid/guideLine
+        //모두 stale. tempObject(Tutorial 전용) SetActive/위치 잔존. DOTween 진행 중 tween이 새
+        //grid 위치 덮어쓰는 race condition.
+        if (_startedOnce)
+        {
+            //leftSide/rightSide localPosition reset.
+            if (leftSide != null) leftSide.transform.localPosition = _leftSideInitialPos;
+            if (rightSide != null) rightSide.transform.localPosition = _rightSideInitialPos;
+            //leftArrow/rightArrow localPosition reset (Tutorial 단계에서 SetParent(dim) 이동했을 수 있음 → 부모도 복원).
+            if (leftArrow != null) leftArrow.transform.localPosition = _leftArrowInitialPos;
+            if (rightArrow != null) rightArrow.transform.localPosition = _rightArrowInitialPos;
+            //가이드라인 중앙 reset.
+            if (guideLine != null) guideLine.transform.localPosition = Vector3.zero;
+            //leftGrid/rightGrid 타일 재생성 — GridController.Start의 SetFirst 첫 활성화만 fire하는
+            //정합 깨짐 해소.
+            if (leftGrid != null) leftGrid.RebuildGrid();
+            if (rightGrid != null) rightGrid.RebuildGrid();
+            //tempObject (Tutorial 전용 GameObject 배열) reset — 부모/자식 두 레이어 모두.
+            if (tempObject != null)
+            {
+                for (int i = 0; i < tempObject.Length; i++)
+                {
+                    if (tempObject[i] == null) continue;
+                    DOTween.Kill(tempObject[i].transform);
+                    if (tempObject[i].transform.childCount > 0)
+                    {
+                        DOTween.Kill(tempObject[i].transform.GetChild(0));
+                        tempObject[i].transform.GetChild(0).localPosition = Vector3.zero;
+                        tempObject[i].transform.GetChild(0).localScale = Vector3.one;
+                    }
+                    if (_tempObjectInitialPos != null && i < _tempObjectInitialPos.Length)
+                    {
+                        tempObject[i].transform.localPosition = _tempObjectInitialPos[i];
+                    }
+                    tempObject[i].transform.localScale = Vector3.one;
+                    var b = tempObject[i].GetComponent<Block>();
+                    if (b != null) b.SetSprite(0);
+                    if (_tempObjectInitialActive != null && i < _tempObjectInitialActive.Length)
+                    {
+                        tempObject[i].SetActive(_tempObjectInitialActive[i]);
+                    }
+                }
+            }
+            //SetGameObjectsFade(1f) 호출로 fade-in DOTween + OnComplete에서 Initalize() 호출 (첫 진입과 동일 흐름).
+            SetGameObjectsFade(1f);
+        }
     }
 
     //ADR-0011 §2.2: dispose 시 명시 코루틴 stop + UI 잔존 정리.

@@ -176,6 +176,8 @@ public class GridController : MonoBehaviour
             grid[x, y] = block.GetComponent<Block>();
             grid[x, y].posX = x;
             grid[x, y].posY = y;
+            //ADR-0011 §2.2 (사용자 결정 2026-05-12): 풀링 prefab의 잔존 sprite/scale/tween 정리.
+            ResetBlockState(block);
         }
         //블록 생성이 반영된 뒤 Initialize 호출
         Invoke("Initialize", 1f);
@@ -198,10 +200,57 @@ public class GridController : MonoBehaviour
             grid[x, y] = block.GetComponent<Block>();
             grid[x, y].posX = x;
             grid[x, y].posY = y;
-
+            //ADR-0011 §2.2 (사용자 결정 2026-05-12): 풀링 prefab의 잔존 sprite/scale/tween 정리.
+            ResetBlockState(block);
         }
         //블록 생성이 반영된 뒤 Initialize 호출
         Invoke("Initialize", 1f);
+    }
+
+    /// <summary>
+    /// ADR-0011 §2.2 (사용자 결정 2026-05-12): PairGrid.RebuildGrid 패턴.
+    /// 재진입 시 GridController.Start의 SetFirst 미트리거 + 풀링 prefab 잔존 상태 정리.
+    /// 자식 모두 (10000,10000)로 이동 + scale/sprite reset → grid 배열 reset → SetFirst 재호출.
+    /// </summary>
+    public void RebuildGrid()
+    {
+        foreach (Collider col in colliders) col.enabled = false;
+        //진행 중 DOTween 정리 — DOMove/DOScale/Shake가 grid prefab 위치/scale 덮어쓰지 못하게.
+        DOTween.Kill("Shake");
+        DOTween.Kill("moveGuideLine");
+        //모든 자식 정리 (풀링 자식 list 보존, 위치만 (10000,10000)로 이동).
+        for (int i = 0; i < transform.childCount; i++)
+        {
+            ResetBlockState(transform.GetChild(i).gameObject);
+            transform.GetChild(i).localPosition = Vector3.one * 10000;
+        }
+        grid = new Block[width, height];
+        GetComponent<GridLayoutGroup>().enabled = true;
+        if (isFirst) CustomGenerateGrid();
+        else GenerateGrid();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(GetComponent<RectTransform>());
+        GetComponent<GridLayoutGroup>().enabled = false;
+        CancelInvoke("Initialize");
+        Invoke("Initialize", 1f);
+    }
+
+    /// <summary>
+    /// 단일 block prefab의 잔존 상태 정리. tween kill + localScale/child position reset + SetSprite(0).
+    /// 재진입 시 stale 상태로 보이거나 위치 어긋남 회피.
+    /// </summary>
+    void ResetBlockState(GameObject block)
+    {
+        if (block == null) return;
+        DOTween.Kill(block.transform);
+        if (block.transform.childCount > 0)
+        {
+            DOTween.Kill(block.transform.GetChild(0));
+            block.transform.GetChild(0).localPosition = Vector3.zero;
+            block.transform.GetChild(0).localScale = Vector3.one;
+        }
+        block.transform.localScale = Vector3.one;
+        var b = block.GetComponent<Block>();
+        if (b != null) b.SetSprite(0);
     }
 
     /// <summary>
