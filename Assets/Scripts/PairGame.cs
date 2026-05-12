@@ -93,6 +93,12 @@ public class PairGame : MonoBehaviour
     Vector3 _leftSideInitialPos;
     Vector3 _rightSideInitialPos;
 
+    //ADR-0011 §2.2 (사용자 결정 2026-05-12, 추가): Tutorial 전용 tempObject 배열의 초기 위치 +
+    //활성 상태 캐싱. 재진입 시 reset해 (a) DOMove(leftDest/rightDest) stale 위치 회복 +
+    //(b) Tutorial 단계별 SetActive(true) 잔존 → 처음부터 보이는 결함 차단.
+    Vector3[] _tempObjectInitialPos;
+    bool[] _tempObjectInitialActive;
+
     //초기 설정
     private void Awake()
     {
@@ -104,6 +110,20 @@ public class PairGame : MonoBehaviour
         //leftSide/rightSide 초기 위치 캐싱 (씬 인스펙터 할당 시점의 transform)
         if (leftSide != null) _leftSideInitialPos = leftSide.transform.localPosition;
         if (rightSide != null) _rightSideInitialPos = rightSide.transform.localPosition;
+        //tempObject 초기 상태 캐싱 — 재진입 reset에 사용
+        if (tempObject != null)
+        {
+            _tempObjectInitialPos = new Vector3[tempObject.Length];
+            _tempObjectInitialActive = new bool[tempObject.Length];
+            for (int i = 0; i < tempObject.Length; i++)
+            {
+                if (tempObject[i] != null)
+                {
+                    _tempObjectInitialPos[i] = tempObject[i].transform.localPosition;
+                    _tempObjectInitialActive[i] = tempObject[i].activeSelf;
+                }
+            }
+        }
     }
 
     //초기 설정2 (위 보다 늦게 실행되는 부분)
@@ -188,6 +208,42 @@ public class PairGame : MonoBehaviour
             //재진입시 grid 배열 stale + 일부 타일이 (10000,10000)에 머무는 케이스 방지.
             if (leftGrid != null) leftGrid.RebuildGrid();
             if (rightGrid != null) rightGrid.RebuildGrid();
+            //ADR-0011 §2.2 (사용자 결정 2026-05-12, 추가): tempObject(Tutorial 전용 별도 GameObject
+            //배열) reset. 사용자 통찰 "충돌위치(부모 transform)는 리셋되는데 이미지 위치(자식
+            //transform)는 변경 안 됨" — 부모 + 자식(image) 두 레이어 모두 reset 필요.
+            //원인: Tutorial 코루틴이 tempObject[0/4].transform.DOMove(leftDest/rightDest)로
+            //부모 이동 + tempObject[0/4].transform.GetChild(0).DOShakePosition으로 자식 shake.
+            //mute로 코루틴 중단 시 부모/자식 모두 stale. 또 SetActive(true) 잔존.
+            if (tempObject != null)
+            {
+                for (int i = 0; i < tempObject.Length; i++)
+                {
+                    if (tempObject[i] == null) continue;
+                    //부모 + 자식의 진행 중 tween 정리.
+                    DOTween.Kill(tempObject[i].transform);
+                    if (tempObject[i].transform.childCount > 0)
+                    {
+                        DOTween.Kill(tempObject[i].transform.GetChild(0));
+                        //자식(image) 위치/스케일 reset.
+                        tempObject[i].transform.GetChild(0).localPosition = Vector3.zero;
+                        tempObject[i].transform.GetChild(0).localScale = Vector3.one;
+                    }
+                    //부모 위치/스케일 reset.
+                    if (_tempObjectInitialPos != null && i < _tempObjectInitialPos.Length)
+                    {
+                        tempObject[i].transform.localPosition = _tempObjectInitialPos[i];
+                    }
+                    tempObject[i].transform.localScale = Vector3.one;
+                    //sprite 기본 상태로 reset.
+                    var po = tempObject[i].GetComponent<PairObject>();
+                    if (po != null) po.SetSprite(0);
+                    //활성 상태를 Awake 시점(첫 진입 초기값)으로 복귀.
+                    if (_tempObjectInitialActive != null && i < _tempObjectInitialActive.Length)
+                    {
+                        tempObject[i].SetActive(_tempObjectInitialActive[i]);
+                    }
+                }
+            }
             //SetGameObjectsFade(1f) 호출로 fade-in DOTween + OnComplete에서 Initalize() 호출.
             //첫 진입(Start 경로)과 동일 흐름 — Tutorial/PlayerPrefs 복원 일관성.
             SetGameObjectsFade(1f);
