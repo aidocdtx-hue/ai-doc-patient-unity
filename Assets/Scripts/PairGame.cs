@@ -125,6 +125,8 @@ public class PairGame : MonoBehaviour
 
         //좌우에서 타일영역 등장
         SetGameObjectsFade(1f);
+        //ADR-0011 §2.2: 첫 진입에서만 Start fire. 재진입 OnEnable의 가드용 플래그.
+        _startedOnce = true;
     }
 
     //켜질 때 호출
@@ -158,7 +160,19 @@ public class PairGame : MonoBehaviour
         //각도 단계에 따라 움직이는 거리 조절
         sideMoveValue = sideMoveValue - 50 * level;
 
+        Debug.Log($"[PairGame.OnEnable] isFirst={isFirst} _startedOnce={_startedOnce} isNormalEnd={StaticData.isNormalEnd}");
+
+        //ADR-0011 §2.2 (logcat-tutorial-verify-20260512-090948 분석): Start()는 Unity 생명주기상
+        //첫 활성화에만 호출됨. 재진입(SetActive false→true cycle)에선 OnEnable만 fire하고
+        //Start()는 skip → SetGameObjectsFade(1f)의 DOTween OnComplete 안에 있는 Initalize() 미호출
+        //→ isFirst=true 분기 미진입 → Tutorial 코루틴 미시작 → dim/tutorialGuideLine 안 켜짐.
+        //재진입에선 fade-in DOTween 없이 즉시 Initalize 호출해 Tutorial 흐름 보장.
+        //첫 진입(Start 경로)은 그대로 유지 — fade-in 효과 살림.
+        if (_startedOnce) Initalize();
     }
+
+    //ADR-0011 §2.2: 첫 진입(Start)과 재진입(OnEnable)의 Initalize 트리거 분기 가드.
+    private bool _startedOnce = false;
 
     //ADR-0011 §2.2: dispose 시 명시 코루틴 stop + UI 잔존 정리. OnEnable과 짝.
     private void OnDisable()

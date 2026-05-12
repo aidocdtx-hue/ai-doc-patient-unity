@@ -111,7 +111,12 @@ public class BlockGame : MonoBehaviour
 
         //배열이 나타나는 명령 전달
         SetGameObjectsFade(1f);
+        //ADR-0011 §2.2: 첫 진입에서만 Start fire. 재진입 OnEnable의 가드용 플래그.
+        _startedOnce = true;
     }
+
+    //ADR-0011 §2.2: 첫 진입(Start)과 재진입(OnEnable)의 Initalize 트리거 분기 가드.
+    private bool _startedOnce = false;
 
     //게임이 켜질 때 호출
     private void OnEnable()
@@ -136,7 +141,15 @@ public class BlockGame : MonoBehaviour
         //각도 단계별로 다른 위치에 있도록 위치 설정
         sideMoveValue = sideMoveValue - 130 * level;
 
+        Debug.Log($"[BlockGame.OnEnable] isFirst={isFirst} _startedOnce={_startedOnce} isNormalEnd={StaticData.isNormalEnd}");
 
+        //ADR-0011 §2.2 (logcat-tutorial-verify-20260512-090948 분석): Start()는 Unity 생명주기상
+        //첫 활성화에만 호출됨. 재진입(SetActive false→true cycle)에선 OnEnable만 fire하고
+        //Start()는 skip → SetGameObjectsFade(1f)의 DOTween OnComplete 안에 있는 Initalize() 미호출
+        //→ isFirst=true 분기 미진입 → Tutorial 코루틴 미시작 → dim/tutorialGuideLine 안 켜짐.
+        //재진입에선 fade-in DOTween 없이 즉시 Initalize 호출해 Tutorial 흐름 보장.
+        //첫 진입(Start 경로)은 그대로 유지 — fade-in 효과 살림.
+        if (_startedOnce) Initalize();
     }
 
     //ADR-0011 §2.2: dispose 시 명시 코루틴 stop + UI 잔존 정리.
