@@ -350,6 +350,17 @@ public class PointsController : MonoBehaviour
             startScreen.gameGuidePanel.SetActive(true);
         }
 
+        //ADR-0011 §2.2 (사용자 결정 2026-05-12): 가이드 화면에서 CalibrationPoint(어깨 위치 트리거)
+        //주황 볼 시각화 노출 차단. CalibrationPoint이 calibrationPanel과 별도 path에 있어
+        //calibrationPanel.SetActive(false)만으로 비활성 안 됨 → Renderer 명시 OFF.
+        //Calibration.OnEnable에서 다시 ON되어 캘리브레이션 단계엔 정상 노출.
+        var calibrationPoints = FindObjectsOfType<CalibrationPoint>(true);
+        foreach (var cp in calibrationPoints)
+        {
+            var r = cp.GetComponent<Renderer>();
+            if (r != null) r.enabled = false;
+        }
+
         Time.timeScale = 1f;
         AudioListener.pause = false;
         _isPaused = false;

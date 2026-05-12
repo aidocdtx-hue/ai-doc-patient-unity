@@ -67,6 +67,14 @@ public class Calibration : MonoBehaviour
         //스켈레톤 켜기
         pointsController.SetPointandConnectionEnabled(true);
 
+        //ADR-0011 §2.2 (사용자 결정 2026-05-12): ReturnToGameGuide에서 OFF한 CalibrationPoint
+        //Renderer 다시 ON. 캘리브레이션 단계엔 어깨 위치 트리거 시각화 필요.
+        foreach (var cp in GetComponentsInChildren<CalibrationPoint>(true))
+        {
+            var r = cp.GetComponent<Renderer>();
+            if (r != null) r.enabled = true;
+        }
+
         //정상종료였다면
         if (PlayerPrefs.GetInt("NormalEnd") == 0) 
         {

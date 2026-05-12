@@ -290,6 +290,10 @@ public class PairGrid : MonoBehaviour
                 //블록이 가지고있는 스크립트에 현재 위치 할당
                 grid[i, j].posX = i;
                 grid[i, j].posY = j;
+                //ADR-0011 §2.2 (사용자 결정 2026-05-12): 풀링 패턴에서 직전 SetSprite(1/2)이
+                //잔존한 prefab이 grid에 들어가면 일부 동물(예: 돼지)의 sprites[1/2]이 null인
+                //케이스 visual 빠짐. 매 GenerateGrid에 명시 sprites[0] 기본 상태로 reset.
+                grid[i, j].SetSprite(0);
             }
         }
     }

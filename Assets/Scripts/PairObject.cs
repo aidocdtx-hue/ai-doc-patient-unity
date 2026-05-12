@@ -24,12 +24,37 @@ public class PairObject : MonoBehaviour
         animalImage = transform.GetChild(0).GetComponent<Image>();
     }
 
+    //ADR-0011 §2.2 (사용자 결정 2026-05-12): 풀링 패턴 + Tutorial의 SetSprite(1/2) 호출이 dispose
+    //시점까지 잔존 → 재진입 RebuildGrid가 같은 prefab을 풀에서 가져오면 떠는/찡그린 표정 sprite
+    //그대로. 특정 동물(예: 돼지) prefab의 sprites[1/2]이 null이면 visual 자체가 빠짐.
+    //OnEnable에서 매 활성화 시 sprites[0](기본 상태)으로 reset해 모든 동물 표시 보장.
+    void OnEnable()
+    {
+        //Start 이전 fire 케이스 — animalImage 미할당. lazy load.
+        if (animalImage == null && transform.childCount > 0)
+        {
+            animalImage = transform.GetChild(0).GetComponent<Image>();
+        }
+        if (animalImage != null && sprites != null && sprites.Length > 0)
+        {
+            animalImage.sprite = sprites[0];
+        }
+    }
+
     /// <summary>
     /// 동물 표정 이미지 교체를 해주는 부분
     /// </summary>
     /// <param name="i">0 = 기본 상태, 1 = 떠는 표정, 2= 찡그린 표정</param>
     public void SetSprite(int i)
     {
-        animalImage.sprite = sprites[i];
+        //ADR-0011 §2.2: animalImage 미할당 가드. Start 이전 호출 시 lazy load.
+        if (animalImage == null && transform.childCount > 0)
+        {
+            animalImage = transform.GetChild(0).GetComponent<Image>();
+        }
+        if (animalImage != null && sprites != null && i >= 0 && i < sprites.Length)
+        {
+            animalImage.sprite = sprites[i];
+        }
     }
 }
